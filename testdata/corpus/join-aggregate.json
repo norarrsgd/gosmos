@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "join-aggregate",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "join": {
+        "alias": "j",
+        "arrayPath": "items",
+        "columns": [
+          "sku"
+        ],
+        "aggregates": [
+          {
+            "column": "price",
+            "aggregate": "Sum"
+          }
+        ]
+      }
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c[\u0022id\u0022], j[\u0022sku\u0022], SUM(j[\u0022price\u0022]) AS price_Sum FROM c JOIN j IN c[\u0022items\u0022] GROUP BY j[\u0022sku\u0022]",
+  "params": [],
+  "errorCategory": null
+}

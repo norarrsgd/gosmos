@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "projection-nested",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "projection": {
+        "items": [
+          {
+            "name": "data",
+            "object": {
+              "items": [
+                {
+                  "name": "OwnerName",
+                  "column": "data.owner",
+                  "alias": "c"
+                },
+                {
+                  "name": "nested",
+                  "object": {
+                    "items": [
+                      {
+                        "name": "quote\u0022key",
+                        "column": "data.ticketId",
+                        "alias": "c"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c[\u0022id\u0022], {\u0022OwnerName\u0022: c[\u0022data\u0022][\u0022owner\u0022], \u0022nested\u0022: {\u0022quote\\u0022key\u0022: c[\u0022data\u0022][\u0022ticketId\u0022]}} AS data FROM c",
+  "params": [],
+  "errorCategory": null
+}

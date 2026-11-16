@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "fulltext-rank",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "text",
+            "operator": "FTScore",
+            "value": [
+              "one",
+              "two"
+            ],
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "top": 5
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT TOP 5 c[\u0022id\u0022] FROM c ORDER BY RANK FullTextScore(c[\u0022text\u0022], @p0, @p1)",
+  "params": [
+    "one",
+    "two"
+  ],
+  "errorCategory": null
+}

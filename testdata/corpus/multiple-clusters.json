@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "multiple-clusters",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "status",
+            "operator": "Eq",
+            "value": "active",
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          },
+          {
+            "column": "total",
+            "operator": "Gte",
+            "value": 10,
+            "where": "OR",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          }
+        ],
+        "where": "AND"
+      },
+      {
+        "where": "OR",
+        "catalysts": [
+          {
+            "column": "tenantId",
+            "operator": "Eq",
+            "value": "tenant",
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          }
+        ]
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (c[\u0022status\u0022] = @p0 OR c[\u0022total\u0022] \u003E= @p1) OR (c[\u0022tenantId\u0022] = @p2)",
+  "params": [
+    "active",
+    10,
+    "tenant"
+  ],
+  "errorCategory": null
+}

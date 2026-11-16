@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "projection-fields",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "projection": {
+        "items": [
+          {
+            "name": "ID",
+            "column": "id",
+            "alias": "c"
+          },
+          {
+            "name": "OwnerName",
+            "column": "data.owner",
+            "alias": "c"
+          }
+        ]
+      }
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c[\u0022id\u0022] AS ID, c[\u0022data\u0022][\u0022owner\u0022] AS OwnerName FROM c",
+  "params": [],
+  "errorCategory": null
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "groups",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {},
+    "sorting": [],
+    "groups": [
+      "status",
+      "tenantId"
+    ]
+  },
+  "sql": "SELECT c[\u0022status\u0022], c[\u0022tenantId\u0022] FROM c GROUP BY c[\u0022status\u0022], c[\u0022tenantId\u0022]",
+  "params": [],
+  "errorCategory": null
+}

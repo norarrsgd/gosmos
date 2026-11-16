@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "top-distinct-sort",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "top": 5,
+      "isDistinct": true
+    },
+    "sorting": [
+      {
+        "column": "id",
+        "direction": "DESC"
+      }
+    ],
+    "groups": []
+  },
+  "sql": "SELECT DISTINCT TOP 5 c[\u0022id\u0022] FROM c ORDER BY c[\u0022id\u0022] DESC",
+  "params": [],
+  "errorCategory": null
+}

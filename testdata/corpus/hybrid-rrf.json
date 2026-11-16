@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "hybrid-rrf",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "embedding",
+            "operator": "VectorDistance",
+            "value": [
+              0.1,
+              0.2
+            ],
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          },
+          {
+            "column": "text",
+            "operator": "FTScore",
+            "value": [
+              "one",
+              "two"
+            ],
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "top": 5
+    },
+    "sorting": [
+      {
+        "column": "0.7, 0.3",
+        "direction": "WEIGHTED"
+      }
+    ],
+    "groups": []
+  },
+  "sql": "SELECT TOP 5 c[\u0022id\u0022], VectorDistance(c[\u0022embedding\u0022], @p0) AS embeddingScore FROM c ORDER BY RANK RRF(VectorDistance(c[\u0022embedding\u0022], @p0), FullTextScore(c[\u0022text\u0022], @p1, @p2), [0.7, 0.3])",
+  "params": [
+    [
+      0.1,
+      0.2
+    ],
+    "one",
+    "two"
+  ],
+  "errorCategory": null
+}

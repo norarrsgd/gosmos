@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "projection-aggregate",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "projection": {
+        "items": [
+          {
+            "name": "Status",
+            "column": "status",
+            "alias": "c"
+          },
+          {
+            "name": "Total",
+            "column": "total",
+            "alias": "c",
+            "aggregate": "Sum"
+          }
+        ]
+      }
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c[\u0022status\u0022] AS Status, SUM(c[\u0022total\u0022]) AS Total FROM c GROUP BY c[\u0022status\u0022]",
+  "params": [],
+  "errorCategory": null
+}

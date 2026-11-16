@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "field-to-field",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "data.left",
+            "operator": "Eq",
+            "left": {
+              "kind": "Field",
+              "path": "data.left",
+              "alias": "c",
+              "value": null
+            },
+            "right": {
+              "kind": "Field",
+              "path": "data.right",
+              "alias": "c",
+              "value": null
+            }
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (c[\u0022data\u0022][\u0022left\u0022] = c[\u0022data\u0022][\u0022right\u0022])",
+  "params": [],
+  "errorCategory": null
+}

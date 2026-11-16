@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "array-length-to-parameter",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "events",
+            "operator": "Gte",
+            "left": {
+              "kind": "ArrayLength",
+              "path": "events",
+              "alias": "c",
+              "value": null
+            },
+            "right": {
+              "kind": "Parameter",
+              "path": "",
+              "alias": "c",
+              "value": 2
+            }
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (ARRAY_LENGTH(c[\u0022events\u0022]) \u003E= @p0)",
+  "params": [
+    2
+  ],
+  "errorCategory": null
+}

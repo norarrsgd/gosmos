@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "like",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "data.value",
+            "operator": "Like",
+            "value": "%literal_%",
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (c[\u0022data\u0022][\u0022value\u0022] LIKE @p0)",
+  "params": [
+    "%literal_%"
+  ],
+  "errorCategory": null
+}

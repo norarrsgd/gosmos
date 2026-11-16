@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "reject-partial-match",
+  "tags": [
+    "reject"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "data.value",
+            "operator": "Eq",
+            "value": 1,
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": true
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": null,
+  "params": [],
+  "errorCategory": "validation"
+}

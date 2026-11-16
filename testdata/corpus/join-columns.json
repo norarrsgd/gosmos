@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "join-columns",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "join": {
+        "alias": "j",
+        "arrayPath": "items",
+        "columns": [
+          "sku",
+          "price"
+        ]
+      }
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c.*, j[\u0022sku\u0022], j[\u0022price\u0022] FROM c JOIN j IN c[\u0022items\u0022]",
+  "params": [],
+  "errorCategory": null
+}

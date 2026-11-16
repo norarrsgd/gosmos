@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "selected-columns",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [],
+    "columns": {
+      "names": [
+        "id",
+        "data.owner"
+      ]
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT c[\u0022id\u0022], c[\u0022data\u0022][\u0022owner\u0022] FROM c",
+  "params": [],
+  "errorCategory": null
+}

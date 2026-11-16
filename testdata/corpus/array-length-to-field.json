@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "array-length-to-field",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "events",
+            "operator": "Gt",
+            "left": {
+              "kind": "ArrayLength",
+              "path": "events",
+              "alias": "c",
+              "value": null
+            },
+            "right": {
+              "kind": "Field",
+              "path": "queued",
+              "alias": "share",
+              "value": null
+            }
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (ARRAY_LENGTH(c[\u0022events\u0022]) \u003E share[\u0022queued\u0022])",
+  "params": [],
+  "errorCategory": null
+}

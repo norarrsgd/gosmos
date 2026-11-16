@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "partial-object-not-in",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "data.value",
+            "operator": "NotIn",
+            "value": {
+              "id": "owner"
+            },
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": true
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {},
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT * FROM c WHERE (NOT ARRAY_CONTAINS(c[\u0022data\u0022][\u0022value\u0022], @p0, true))",
+  "params": [
+    {
+      "id": "owner"
+    }
+  ],
+  "errorCategory": null
+}

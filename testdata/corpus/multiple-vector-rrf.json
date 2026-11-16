@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "universeCommit": "911dd588ad4f4a8c30e22469f93fc6af377f2d09",
+  "name": "multiple-vector-rrf",
+  "tags": [
+    "parity"
+  ],
+  "input": {
+    "clusters": [
+      {
+        "catalysts": [
+          {
+            "column": "embedding",
+            "operator": "VectorDistance",
+            "value": [
+              0.1,
+              0.2
+            ],
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false,
+            "id": "vector00000001"
+          },
+          {
+            "column": "embedding",
+            "operator": "VectorDistance",
+            "value": [
+              0.2,
+              0.3
+            ],
+            "where": "AND",
+            "alias": "c",
+            "ignoreCase": false,
+            "partialMatch": false,
+            "id": "vector00000002"
+          }
+        ],
+        "where": "AND"
+      }
+    ],
+    "columns": {
+      "names": [
+        "id"
+      ],
+      "top": 5
+    },
+    "sorting": [],
+    "groups": []
+  },
+  "sql": "SELECT TOP 5 c[\u0022id\u0022], VectorDistance(c[\u0022embedding\u0022], @p0) AS embeddingScore, VectorDistance(c[\u0022embedding\u0022], @p1) AS embeddingScore00000002 FROM c ORDER BY RANK RRF(VectorDistance(c[\u0022embedding\u0022], @p0), VectorDistance(c[\u0022embedding\u0022], @p1))",
+  "params": [
+    [
+      0.1,
+      0.2
+    ],
+    [
+      0.2,
+      0.3
+    ]
+  ],
+  "errorCategory": null
+}

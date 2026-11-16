@@ -1,0 +1,19 @@
+name: Nightly fuzz
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [FuzzValidateIdentifier, FuzzNormalize, FuzzBuild]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./query -run '^$' -fuzz '${{ matrix.target }}' -fuzztime 60s
