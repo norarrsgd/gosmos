@@ -43,6 +43,8 @@ The guard inspects query structure, including aggregates inside nested projectio
 
 ## Disallow all keyless queries
 
+Queries default to cross-partition execution, so a forgotten `InPartition` call runs across every tenant. Multi-tenant services should disable it and make partition scope mandatory.
+
 ```go
 orders, err := gosmos.New[Order](client, "shop", "orders",
     gosmos.WithCrossPartition(false))

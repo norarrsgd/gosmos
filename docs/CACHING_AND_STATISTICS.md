@@ -152,7 +152,7 @@ Call `Defaults` explicitly with an application-chosen kind. Gosmos does not auto
 |---|---|---|---|
 | `tuner.NewMemory()` | No filesystem | Latest 1,000 records per store | Process-local observations |
 | `tuner.NewFile(path)` | Existing writable parent directory | Latest 1,000 records per file | Small persistent history, one process per file |
-| `tuner/sqlite.Open(path)` | Separate module and driver | No automatic retention limit | SQLite-backed history |
+| `tuner/sqlite.Open(path)` | Separate module and driver | Latest 10,000 records per database (`sqlite.MaxSamples`) | SQLite-backed history |
 
 All stores implement `Record(context.Context, Sample)` and `Samples(context.Context, hash, since)`.
 
@@ -176,11 +176,11 @@ if err != nil {
 _ = statistics
 ```
 
-Paths must be absolute and already clean. Existing files must be regular and owner-only; symlinks at the file path are rejected by construction-time checks. The parent directory must exist.
+Paths must be absolute and already clean. Existing files must be regular and owner-only; symlinks at the file path are rejected by construction-time checks. The parent directory must exist. Parent-directory symlinks are resolved at construction, and the store keeps using that resolved location if a symlink later changes.
 
-Each record write reads the current history, keeps the newest 1,000 records, writes an owner-only temporary file, syncs it, and renames it into place. Access is serialized within the process. Separate processes do not share that lock, so use one writer process per file.
+Each record write reads the current history, keeps the newest 1,000 records, writes an owner-only temporary file, and renames it into place without `fsync`; a crash can leave a truncated file, which is recovered as described below and can discard the entire retained history, not only recent samples. Access is serialized per file within the process, including aliases of the same file such as hard links or differently cased names on case-insensitive filesystems, and a caller waiting for that lock stops when its context ends. Separate processes do not share that lock, so use one writer process per file.
 
-If a file contains invalid JSON, storage moves it aside under `.gosmos-corrupt-*` and starts with empty history. Recovery preserves the old bytes for inspection instead of overwriting them. Storage methods can return filesystem errors if backup or replacement fails.
+If a file contains invalid JSON, storage moves it aside under `.gosmos-corrupt-*` and starts with empty history. Recovery preserves the old bytes for inspection instead of overwriting them; Gosmos never deletes these backups, so repeated corruption accumulates them and the application should prune them. Storage methods can return filesystem errors if backup or replacement fails.
 
 ### SQLite storage
 
@@ -215,9 +215,9 @@ if err != nil {
 _ = orders
 ```
 
-Close the store after the repositories using it have finished. The database uses an owner-only regular file, creates its sample table if needed, and serializes access through one database connection. Writes are immediate inserts; there is no background batch queue, automatic pruning, or application-level retry loop.
+Close the store after the repositories using it have finished. The database uses an owner-only regular file, creates its sample table if needed, and serializes access through one database connection. Each write inserts the sample and prunes older rows in one transaction; there is no background batch queue or application-level retry loop.
 
-Storage uses a `samples` table containing hash, timestamp, and JSON sample value. The application owns database lifecycle and retention policy.
+Storage uses a `samples` table containing hash, timestamp, and JSON sample value, indexed by hash and timestamp. Storage keeps the newest `sqlite.MaxSamples` rows across all query hashes; the application owns the database lifecycle.
 
 ## Query recording is separate
 

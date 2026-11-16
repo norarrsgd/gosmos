@@ -28,6 +28,8 @@ Within `internal/repository/`:
 
 Within `query`, `build.go` assembles SQL, `catalyst.go` validates and renders predicates, `projection.go` builds and renders projections, and `ranking.go` renders ordering and ranking expressions. Within `tuner`, `storage.go` defines shared contracts and sample validation, `memory.go` and `file.go` implement storage, and `recommendation.go` analyzes samples and supplies default hints. Tests remain beside the packages they exercise; the separate SQLite module implements the same storage contract.
 
+File statistics storage pins the resolved parent-directory path at construction and uses that path for I/O. Its context-aware lock is shared by every name for the same on-disk file, releases canceled acquisitions before I/O, and removes idle lock entries.
+
 Requires Go 1.27. Run `go build ./...`, `go vet ./...`, and `go test -race ./...`. Check the SQLite module separately with `(cd tuner/sqlite && go test -race ./...)`.
 
 Values are bound as parameters and identifiers are validated before rendering. SDK response errors remain accessible through `errors.As`. Unsupported cross-partition query shapes fail before network execution; Gosmos does not implement a client-side fan-out engine.

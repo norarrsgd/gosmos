@@ -13,6 +13,9 @@ import (
 	"time"
 )
 
+// MaxSamples is the number of newest samples kept across all query hashes.
+const MaxSamples = 10000
+
 type Storage struct{ db *sql.DB }
 
 func Open(path string) (*Storage, error) {
@@ -43,6 +46,10 @@ func Open(path string) (*Storage, error) {
 		db.Close()
 		return nil, e
 	}
+	if _, e = db.Exec(`CREATE INDEX IF NOT EXISTS samples_hash_timestamp ON samples(hash, timestamp)`); e != nil {
+		db.Close()
+		return nil, e
+	}
 	return &Storage{db}, nil
 }
 func (s *Storage) Close() error { return s.db.Close() }
@@ -55,8 +62,25 @@ func (s *Storage) Record(ctx context.Context, v tuner.Sample) error {
 	if e != nil {
 		return e
 	}
-	_, e = s.db.ExecContext(ctx, `INSERT INTO samples(hash,timestamp,value) VALUES(?,?,?)`, v.Hash, v.Timestamp.UnixNano(), b)
-	return e
+	// One transaction, so cancellation never leaves an inserted row unpruned.
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	result, e := tx.ExecContext(ctx, `INSERT INTO samples(hash,timestamp,value) VALUES(?,?,?)`, v.Hash, v.Timestamp.UnixNano(), b)
+	if e != nil {
+		return e
+	}
+	// Rowids grow monotonically because only the oldest rows are deleted.
+	last, e := result.LastInsertId()
+	if e != nil {
+		return e
+	}
+	if _, e = tx.ExecContext(ctx, `DELETE FROM samples WHERE rowid<=?`, last-MaxSamples); e != nil {
+		return e
+	}
+	return tx.Commit()
 }
 func (s *Storage) Samples(ctx context.Context, hash string, since time.Time) ([]tuner.Sample, error) {
 	rows, e := s.db.QueryContext(ctx, `SELECT value FROM samples WHERE hash=? AND timestamp>=? ORDER BY timestamp`, hash, since.UnixNano())
