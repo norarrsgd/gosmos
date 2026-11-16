@@ -1,16 +1,16 @@
-package gosmos
+package repository
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 )
 
 const batchMaxBytes = 2 * 1024 * 1024
@@ -23,6 +23,7 @@ type BatchItemResult[T Entity] struct {
 	ETag   string
 	Err    error
 }
+
 type BatchResult[T Entity] struct {
 	Items   []BatchItemResult[T]
 	Gravity Gravity
@@ -44,10 +45,12 @@ type batchOperation[T Entity] struct {
 	item     T
 	size     int
 }
+
 type batchContainer interface {
 	NewTransactionalBatch(azcosmos.PartitionKey) azcosmos.TransactionalBatch
 	ExecuteTransactionalBatch(context.Context, azcosmos.TransactionalBatch, *azcosmos.TransactionalBatchOptions) (azcosmos.TransactionalBatchResponse, error)
 }
+
 type batchBuilder[T Entity] struct {
 	galaxy     *Galaxy[T]
 	operations []batchOperation[T]
@@ -55,18 +58,6 @@ type batchBuilder[T Entity] struct {
 	err        error
 }
 
-// AtomicBatch executes all operations in a single logical partition transaction.
-type AtomicBatch[T Entity] struct{ builder batchBuilder[T] }
-
-// BulkBatch executes ordered transaction chunks per partition, at most four partitions at once.
-// Successfully committed chunks remain committed if another chunk fails.
-type BulkBatch[T Entity] struct{ builder batchBuilder[T] }
-
-func (g *Galaxy[T]) Atomic(pk ...string) *AtomicBatch[T] {
-	key, err := stringKey(pk, len(g.metadata.fields))
-	return &AtomicBatch[T]{builder: batchBuilder[T]{galaxy: g, key: &key, err: err}}
-}
-func (g *Galaxy[T]) Bulk() *BulkBatch[T] { return &BulkBatch[T]{builder: batchBuilder[T]{galaxy: g}} }
 func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
 	if b.err != nil {
 		return
@@ -116,6 +107,7 @@ func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
 	}
 	b.add(batchOperation[T]{kind: kind, id: copy.GetID(), key: key, body: body, item: copy}, options)
 }
+
 func (b *batchBuilder[T]) add(operation batchOperation[T], options []WriteOption) {
 	if b.err != nil {
 		return
@@ -170,6 +162,7 @@ func (b *batchBuilder[T]) add(operation batchOperation[T], options []WriteOption
 	}
 	b.operations = append(b.operations, operation)
 }
+
 func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[T]), options []WriteOption) {
 	if b.err != nil {
 		return
@@ -201,54 +194,7 @@ func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[
 	}
 	b.add(operation, options)
 }
-func (b *AtomicBatch[T]) Create(item T, o ...WriteOption) *AtomicBatch[T] {
-	b.builder.model("create", item, o)
-	return b
-}
-func (b *AtomicBatch[T]) Replace(item T, o ...WriteOption) *AtomicBatch[T] {
-	b.builder.model("replace", item, o)
-	return b
-}
-func (b *AtomicBatch[T]) Upsert(item T, o ...WriteOption) *AtomicBatch[T] {
-	b.builder.model("upsert", item, o)
-	return b
-}
-func (b *AtomicBatch[T]) Read(id string, o ...WriteOption) *AtomicBatch[T] {
-	b.builder.point("read", id, nil, nil, o)
-	return b
-}
-func (b *AtomicBatch[T]) Remove(id string, o ...WriteOption) *AtomicBatch[T] {
-	b.builder.point("delete", id, nil, nil, o)
-	return b
-}
-func (b *AtomicBatch[T]) Patch(id string, p func(*Patch[T]), o ...WriteOption) *AtomicBatch[T] {
-	b.builder.point("patch", id, nil, p, o)
-	return b
-}
-func (b *BulkBatch[T]) Create(item T, o ...WriteOption) *BulkBatch[T] {
-	b.builder.model("create", item, o)
-	return b
-}
-func (b *BulkBatch[T]) Replace(item T, o ...WriteOption) *BulkBatch[T] {
-	b.builder.model("replace", item, o)
-	return b
-}
-func (b *BulkBatch[T]) Upsert(item T, o ...WriteOption) *BulkBatch[T] {
-	b.builder.model("upsert", item, o)
-	return b
-}
-func (b *BulkBatch[T]) Read(id string, pk []string, o ...WriteOption) *BulkBatch[T] {
-	b.builder.point("read", id, pk, nil, o)
-	return b
-}
-func (b *BulkBatch[T]) Remove(id string, pk []string, o ...WriteOption) *BulkBatch[T] {
-	b.builder.point("delete", id, pk, nil, o)
-	return b
-}
-func (b *BulkBatch[T]) Patch(id string, pk []string, p func(*Patch[T]), o ...WriteOption) *BulkBatch[T] {
-	b.builder.point("patch", id, pk, p, o)
-	return b
-}
+
 func (b *batchBuilder[T]) initial() (BatchResult[T], error) {
 	result := BatchResult[T]{Items: make([]BatchItemResult[T], len(b.operations))}
 	for i, operation := range b.operations {
@@ -262,26 +208,7 @@ func (b *batchBuilder[T]) initial() (BatchResult[T], error) {
 	}
 	return result, nil
 }
-func (b *AtomicBatch[T]) Execute(ctx context.Context) (BatchResult[T], error) {
-	result, err := b.builder.initial()
-	if err != nil {
-		return result, err
-	}
-	size := 1
-	for _, operation := range b.builder.operations {
-		size += operation.size
-	}
-	if len(b.builder.operations) > 100 || size > batchMaxBytes {
-		return result.rejected(b.builder.galaxy.failure("batch", validation("atomic batch exceeds 100 operations or 2 MiB")))
-	}
-	indexes := make([]int, len(result.Items))
-	for i := range indexes {
-		indexes[i] = i
-	}
-	ru, err := b.builder.executeChunk(ctx, indexes, &result)
-	result.Gravity.RU = ru
-	return result, err
-}
+
 func (b *batchBuilder[T]) executeChunk(ctx context.Context, indexes []int, result *BatchResult[T]) (float64, error) {
 	fail := func(err error) (float64, error) {
 		for _, index := range indexes {
@@ -345,65 +272,4 @@ func (b *batchBuilder[T]) executeChunk(ctx context.Context, indexes []int, resul
 		}
 	}
 	return float64(response.RequestCharge), errors.Join(all...)
-}
-func (b *BulkBatch[T]) Execute(ctx context.Context) (BatchResult[T], error) {
-	result, err := b.builder.initial()
-	if err != nil {
-		return result, err
-	}
-	var groups [][]int
-	for i, operation := range b.builder.operations {
-		found := -1
-		for j, group := range groups {
-			if reflect.DeepEqual(operation.key, b.builder.operations[group[0]].key) {
-				found = j
-				break
-			}
-		}
-		if found < 0 {
-			groups = append(groups, []int{i})
-		} else {
-			groups[found] = append(groups[found], i)
-		}
-	}
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var failures []error
-	jobs := make(chan []int)
-	for range min(4, len(groups)) {
-		wg.Go(func() {
-			for group := range jobs {
-				size := 1
-				start := 0
-				for start < len(group) {
-					end := start
-					size = 1
-					for end < len(group) && end-start < 100 && size+b.builder.operations[group[end]].size <= batchMaxBytes {
-						size += b.builder.operations[group[end]].size
-						end++
-					}
-					ru, err := b.builder.executeChunk(ctx, group[start:end], &result)
-					mu.Lock()
-					result.Gravity.RU += ru
-					if err != nil {
-						failures = append(failures, err)
-					}
-					mu.Unlock()
-					if err != nil {
-						for _, index := range group[end:] {
-							result.Items[index].Err = err
-						}
-						break
-					}
-					start = end
-				}
-			}
-		})
-	}
-	for _, group := range groups {
-		jobs <- group
-	}
-	close(jobs)
-	wg.Wait()
-	return result, errors.Join(failures...)
 }

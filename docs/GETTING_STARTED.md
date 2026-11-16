@@ -15,7 +15,7 @@ The examples below use a container named `orders` in database `shop`, with parti
 
 ## Use a local checkout
 
-The module import path is `github.com/norarrsgd/gosmos`. To use your checkout from another Go module, add a local replacement with the absolute path to that checkout:
+Import `github.com/norarrsgd/gosmos` for the repository API, including `gosmos.New`, document reads and writes, and fluent query execution. The separate `github.com/norarrsgd/gosmos/query` package generates SQL without executing database requests. To use your checkout from another Go module, add a local replacement with the absolute path to that checkout:
 
 ```sh
 go mod edit -require=github.com/norarrsgd/gosmos@v0.0.0

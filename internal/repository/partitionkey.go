@@ -1,4 +1,4 @@
-package gosmos
+package repository
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"

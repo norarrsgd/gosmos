@@ -4,6 +4,8 @@
 
 Gosmos is the Go counterpart of [Universe](https://github.com/norarrsgd/universe). It combines a standalone SQL builder with a repository API for documents, projections, pagination, transactions, and search.
 
+Import `github.com/norarrsgd/gosmos` for database operations, `github.com/norarrsgd/gosmos/query` for standalone SQL generation, and `github.com/norarrsgd/gosmos/tuner` for query statistics. The root package exposes the public API; repository implementation lives under `internal/`.
+
 ```go
 orders, err := gosmos.New[Order](client, "shop", "orders")
 if err != nil {

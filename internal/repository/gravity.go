@@ -1,4 +1,4 @@
-package gosmos
+package repository
 
 // Gravity contains the cost and metadata of a database operation.
 type Gravity struct {

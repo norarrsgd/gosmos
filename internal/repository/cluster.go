@@ -1,4 +1,4 @@
-package gosmos
+package repository
 
 import "github.com/norarrsgd/gosmos/query"
 

@@ -1,4 +1,4 @@
-package gosmos
+package query_test
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestQueryHasNoExternalDependencies(t *testing.T) {
-	cmd := exec.Command("go", "list", "-deps", "-json", "./query")
+	cmd := exec.Command("go", "list", "-deps", "-json", ".")
 	out, e := cmd.Output()
 	if e != nil {
 		t.Fatal(e)
