@@ -215,7 +215,9 @@ if err != nil {
 _ = orders
 ```
 
-Close the store after the repositories using it have finished. The database uses an owner-only regular file, creates its sample table if needed, and serializes access through one database connection. Each write inserts the sample and prunes older rows in one transaction; there is no background batch queue or application-level retry loop.
+Close the store after the repositories using it have finished. The database uses an owner-only regular file, creates its sample table if needed, and serializes access through one database connection. On Unix, the resolved parent must be owned by the current user and must not be group- or world-writable. Every directory entry leading to it must be protected by the current user or root; a sticky shared directory such as `/tmp` is accepted only for entries owned by the current user or root. Secure parent-directory symlinks remain supported.
+
+Construction keeps the resolved directory and database file open, establishes the SQLite connection, and verifies that SQLite's live main database is the same regular, owner-only file before creating the schema. A replaceable directory entry, a final-component symlink, an ownership or permission mismatch, or a live database identity mismatch fails construction before schema statements run. Each write inserts the sample and prunes older rows in one transaction; there is no background batch queue or application-level retry loop.
 
 Storage uses a `samples` table containing hash, timestamp, and JSON sample value, indexed by hash and timestamp. Storage keeps the newest `sqlite.MaxSamples` rows across all query hashes; the application owns the database lifecycle.
 
