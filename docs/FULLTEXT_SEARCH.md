@@ -143,6 +143,8 @@ _ = statement
 
 The same validation and parameterization rules apply to fluent and declarative inputs. Multi-term filter inputs are bound as arrays; score terms use individual parameters.
 
+Term arrays are limited to 64 terms per predicate and 1,024 UTF-8 bytes per term, with 64 KiB of term bytes across the query. The query also permits at most 1,024 parameters and 256 KiB of generated SQL. Oversized inputs fail locally; see [query construction budgets](DECLARATIVE_QUERY_SYNTAX.md#query-construction-budgets).
+
 ## Execution requirements
 
 - The account must support the full-text features being used.
