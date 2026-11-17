@@ -6,7 +6,7 @@ import "context"
 type AtomicBatch[T Entity] struct{ builder batchBuilder[T] }
 
 func (g *Galaxy[T]) Atomic(pk ...string) *AtomicBatch[T] {
-	key, err := stringKey(pk, len(g.metadata.fields))
+	key, err := g.metadata.explicitKey(pk)
 	return &AtomicBatch[T]{builder: batchBuilder[T]{galaxy: g, key: &key, err: err}}
 }
 

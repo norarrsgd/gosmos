@@ -37,7 +37,7 @@ _ = rows
 _ = gravity
 ```
 
-Without `InPartition`, ordering and TOP are rejected before a request. For hierarchical keys, provide every component in schema order; a tenant prefix alone is not a complete logical partition key.
+Without `InPartition`, ordering and TOP are rejected before a request. For hierarchical keys, provide every component in schema order; a tenant prefix alone is not a complete logical partition key. `PartitionKeyer` repositories obtain that width from tags or `WithPartitionKeyCount`; unknown and partial widths are rejected before the single-partition guard.
 
 The guard inspects query structure, including aggregates inside nested projections. It does not infer partition scope from WHERE clauses. Even `Eq("tenantId", "tenant-1")` remains a keyless query unless `InPartition` is supplied.
 

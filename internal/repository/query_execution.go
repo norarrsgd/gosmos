@@ -54,15 +54,17 @@ func executeQuery[R any, T Entity](ctx context.Context, o *Orbit[T], page *query
 	if e != nil {
 		return fail(e)
 	}
-	if e = execution.Guard(s.Shape, len(o.pk) > 0, o.g.options.crossPartition); e != nil {
-		return fail(errors.Join(ErrUnsupportedCrossPartition, e))
-	}
 	key := azcosmos.NewPartitionKey()
+	partitioned := false
 	if len(o.pk) > 0 {
-		key, e = stringKey(o.pk, len(o.g.metadata.fields))
+		key, e = o.g.metadata.explicitKey(o.pk)
 		if e != nil {
 			return fail(e)
 		}
+		partitioned = true
+	}
+	if e = execution.Guard(s.Shape, partitioned, o.g.options.crossPartition); e != nil {
+		return fail(errors.Join(ErrUnsupportedCrossPartition, e))
 	}
 	opts := &azcosmos.QueryOptions{ConsistencyLevel: level, PageSizeHint: h.MaxItemCount, ResponseContinuationTokenLimitInKB: h.ResponseContinuationTokenLimitInKB}
 	if page != nil {

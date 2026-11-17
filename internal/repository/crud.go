@@ -143,7 +143,7 @@ func (g *Galaxy[T]) Get(ctx context.Context, id string, pk []string, options ...
 	if err != nil {
 		return zero, Gravity{}, g.failure("get", err)
 	}
-	key, err := stringKey(pk, len(g.metadata.fields))
+	key, err := g.metadata.explicitKey(pk)
 	if err != nil {
 		return zero, Gravity{}, g.failure("get", err)
 	}
@@ -194,7 +194,7 @@ func (g *Galaxy[T]) Remove(ctx context.Context, id string, pk []string, options 
 	if strings.TrimSpace(id) == "" {
 		return Gravity{}, g.failure("remove", validation("document ID is required"))
 	}
-	key, err := stringKey(pk, len(g.metadata.fields))
+	key, err := g.metadata.explicitKey(pk)
 	if err != nil {
 		return Gravity{}, g.failure("remove", err)
 	}

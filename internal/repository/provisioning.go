@@ -14,7 +14,7 @@ func (g *Galaxy[T]) EnsureProvisioned(ctx context.Context) error {
 	if !g.options.autoProvision {
 		return nil
 	}
-	if len(g.metadata.fields) == 0 {
+	if g.metadata.override || len(g.metadata.fields) == 0 {
 		return wrapError("provision", g.metadata.name, validation("provisioning requires partition key tags"))
 	}
 	if err := ctx.Err(); err != nil {
