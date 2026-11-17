@@ -18,21 +18,26 @@ func (b *builder) property(alias, path string) (string, error) {
 	return formatProperty(alias, path, b.input.NamingPolicy)
 }
 
-func addUnique(list []string, value string) []string {
-	for _, v := range list {
-		if v == value {
-			return list
-		}
+func addUnique(list []string, seen map[string]bool, value string) []string {
+	if seen[value] {
+		return list
 	}
+	seen[value] = true
 	return append(list, value)
 }
 
 // Build validates the entire input before returning parameterized Cosmos SQL.
 func Build(input Input) (Statement, error) {
+	if err := validateInputBudget(input); err != nil {
+		return Statement{}, err
+	}
 	b := builder{input: input}
 	text, e := b.build()
 	if e != nil {
 		return Statement{}, e
+	}
+	if len(text) > MaxSQLBytes {
+		return Statement{}, fmt.Errorf("query exceeds %d SQL bytes", MaxSQLBytes)
 	}
 	return Statement{Text: text, Params: b.params, Shape: b.shape}, nil
 }
@@ -45,16 +50,17 @@ func (b *builder) build() (string, error) {
 	}
 	b.shape.Top = o.Top > 0
 	b.shape.Distinct = o.IsDistinct
+	groupSet := map[string]bool{}
 	for _, g := range in.Groups {
 		p, e := b.property("c", g)
 		if e != nil {
 			return "", e
 		}
-		b.groups = addUnique(b.groups, p)
+		b.groups = addUnique(b.groups, groupSet, p)
 	}
 	// Parameter names include an occurrence identity so equal-valued predicates never collapse.
 	var filters []string
-	usedNames := map[string]bool{}
+	nextSuffix := map[string]int{}
 	index := 0
 	for _, cluster := range in.Clusters {
 		join, e := where(cluster.Where)
@@ -71,10 +77,10 @@ func (b *builder) build() (string, error) {
 			}
 			base := parameterName(c, index)
 			name := base
-			for n := 1; usedNames[name]; n++ {
+			if n := nextSuffix[base]; n > 0 {
 				name = base + "_" + strconv.Itoa(n)
 			}
-			usedNames[name] = true
+			nextSuffix[base]++
 			index++
 			if !c.unary() && (c.Right == nil || c.Right.Kind == ParameterOperand) {
 				value := c.Value
@@ -149,6 +155,10 @@ func (b *builder) build() (string, error) {
 	if o.Projection == nil && len(cols) == 0 {
 		cols = []string{"*"}
 	}
+	columnSet := map[string]bool{}
+	for _, column := range cols {
+		columnSet[column] = true
+	}
 	appendAggregates := func(ags []AggregationOption, alias string) error {
 		for _, ag := range ags {
 			expr, e := b.aggregate(ag.Column, ag.Aggregate, alias)
@@ -159,7 +169,7 @@ func (b *builder) build() (string, error) {
 			if ag.Aggregate == Count {
 				name = aliasBase("CountAggregate", in.NamingPolicy)
 			}
-			cols = addUnique(cols, expr+" AS "+name)
+			cols = addUnique(cols, columnSet, expr+" AS "+name)
 			selectedOutputs = append(selectedOutputs, name)
 			b.shape.Aggregate = true
 		}
@@ -173,7 +183,7 @@ func (b *builder) build() (string, error) {
 	}
 	if len(o.Aggregates) > 0 && o.Projection == nil {
 		for _, s := range b.scalars {
-			b.groups = addUnique(b.groups, s)
+			b.groups = addUnique(b.groups, groupSet, s)
 		}
 	}
 	joinText := ""
@@ -201,7 +211,7 @@ func (b *builder) build() (string, error) {
 		if len(j.Aggregates) > 0 && o.Projection == nil {
 			for _, p := range j.Columns {
 				expr, _ := b.property(j.Alias, p)
-				b.groups = addUnique(b.groups, expr)
+				b.groups = addUnique(b.groups, groupSet, expr)
 			}
 		}
 	}
@@ -256,17 +266,11 @@ func (b *builder) build() (string, error) {
 		}
 		if b.shape.Aggregate {
 			for _, scalar := range b.scalars {
-				b.groups = addUnique(b.groups, scalar)
+				b.groups = addUnique(b.groups, groupSet, scalar)
 			}
 		} else if len(b.groups) > 0 {
 			for _, scalar := range b.scalars {
-				found := false
-				for _, g := range b.groups {
-					if g == scalar {
-						found = true
-					}
-				}
-				if !found {
+				if !groupSet[scalar] {
 					return "", fmt.Errorf("every projected field must be in GROUP BY")
 				}
 			}

@@ -13,6 +13,21 @@ type testEntity struct {
 	Base
 	Tenant string `json:"tenant" gosmos:"pk=1"`
 }
+
+type shadowIDEntity struct {
+	Base
+	BodyID string `json:"id"`
+	Tenant string `json:"tenant" gosmos:"pk=1"`
+}
+
+type customJSONEntity struct {
+	methodID string
+	body     string
+}
+
+func (e customJSONEntity) GetID() string                { return e.methodID }
+func (e customJSONEntity) MarshalJSON() ([]byte, error) { return []byte(e.body), nil }
+
 type fakeContainer struct {
 	body    []byte
 	options *azcosmos.ItemOptions
@@ -66,6 +81,56 @@ func TestCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMarshalEntityValidatesDocumentID(t *testing.T) {
+	body, id, err := marshalEntity(customJSONEntity{methodID: "trusted", body: `{"id":"trusted","tenant":"t"}`})
+	if err != nil || id != "trusted" || string(body) != `{"id":"trusted","tenant":"t"}` {
+		t.Fatalf("valid entity: body=%s id=%q err=%v", body, id, err)
+	}
+
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "missing", body: `{"tenant":"t"}`},
+		{name: "duplicate escaped name", body: `{"\u0069d":"trusted","id":"trusted"}`},
+		{name: "non-string", body: `{"id":null,"tenant":"t"}`},
+		{name: "mismatch", body: `{"id":"attacker","tenant":"t"}`},
+		{name: "non-object", body: `["trusted"]`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, _, err := marshalEntity(customJSONEntity{methodID: "trusted", body: test.body}); !errors.Is(err, ErrValidation) {
+				t.Fatalf("expected validation error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestWriteRejectsDivergentSerializedID(t *testing.T) {
+	m, err := inspectEntity[shadowIDEntity]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeContainer{err: errors.New("request reached fake")}
+	g := &Galaxy[shadowIDEntity]{container: f, metadata: m}
+	item := shadowIDEntity{Base: Base{ID: "trusted"}, BodyID: "attacker", Tenant: "t"}
+
+	for _, test := range []struct {
+		name  string
+		write func() error
+	}{
+		{name: "create", write: func() error { _, _, err := g.Create(context.Background(), item); return err }},
+		{name: "modify", write: func() error { _, _, err := g.Modify(context.Background(), item); return err }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f.body = nil
+			if err := test.write(); !errors.Is(err, ErrValidation) || f.body != nil {
+				t.Fatalf("body=%s err=%v", f.body, err)
+			}
+		})
+	}
+}
+
 func TestErrors(t *testing.T) {
 	g, f := testGalaxy(t)
 	for status, sentinel := range map[int]error{404: ErrNotFound, 409: ErrConflict, 412: ErrPreconditionFailed} {

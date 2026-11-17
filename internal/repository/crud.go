@@ -93,13 +93,13 @@ func (g *Galaxy[T]) write(ctx context.Context, item T, replace bool, options []W
 	if err != nil {
 		return zero, Gravity{}, g.failure(op, err)
 	}
-	body, err := json.Marshal(copy)
+	body, id, err := marshalEntity(copy)
 	if err != nil {
 		return zero, Gravity{}, g.failure(op, err)
 	}
 	var response azcosmos.ItemResponse
 	if replace {
-		response, err = g.container.ReplaceItem(ctx, key, copy.GetID(), body, o)
+		response, err = g.container.ReplaceItem(ctx, key, id, body, o)
 	} else {
 		response, err = g.container.CreateItem(ctx, key, body, o)
 	}

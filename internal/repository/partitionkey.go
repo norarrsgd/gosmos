@@ -108,10 +108,7 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 	if err := walk(base, nil, ""); err != nil {
 		return m, err
 	}
-	if len(numbered) == 0 {
-		if m.override {
-			return m, nil
-		}
+	if len(numbered) == 0 && !m.override {
 		return m, validation("entity requires partition key tags or PartitionKeyer")
 	}
 	for n := 1; n <= len(numbered); n++ {
@@ -140,31 +137,39 @@ func (m entityMetadata) withPartitionKeyCount(count int) (entityMetadata, error)
 }
 
 func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) {
+	values, err := m.keyValues(value)
+	if err != nil {
+		return azcosmos.PartitionKey{}, err
+	}
+	return stringKey(values, m.componentCount)
+}
+
+func (m entityMetadata) keyValues(value reflect.Value) ([]string, error) {
 	if m.override {
 		p, ok := value.Interface().(PartitionKeyer)
 		if !ok && value.CanAddr() {
 			p, ok = value.Addr().Interface().(PartitionKeyer)
 		}
 		if !ok {
-			return azcosmos.PartitionKey{}, validation("PartitionKeyer unavailable")
+			return nil, validation("PartitionKeyer unavailable")
 		}
-		return stringKey(p.PartitionKeyValues(), m.componentCount)
+		return p.PartitionKeyValues(), nil
 	}
 	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
-	key := azcosmos.NewPartitionKey()
+	values := make([]string, 0, len(m.fields))
 	for _, field := range m.fields {
 		v := value.FieldByIndex(field.index)
 		if v.Kind() == reflect.Pointer {
 			if v.IsNil() {
-				return key, validation("partition key %s is null", field.path)
+				return nil, validation("partition key %s is null", field.path)
 			}
 			v = v.Elem()
 		}
-		key = key.AppendString(v.String())
+		values = append(values, v.String())
 	}
-	return key, nil
+	return values, nil
 }
 
 func (m entityMetadata) explicitKey(values []string) (azcosmos.PartitionKey, error) {
