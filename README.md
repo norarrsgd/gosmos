@@ -55,6 +55,8 @@ type Order struct {
 }
 ```
 
+`GetID()` is the canonical document identity; embedding `Base` supplies it from `Base.ID`. Full-document writes reject serialized entities whose top-level `id` is missing, duplicated, non-string, or different from `GetID()`.
+
 Supply an authenticated `azcosmos.Client` to `gosmos.New`. Construction validates configuration without making requests. Create a fresh `Orbit` for each query; the repository can be shared between goroutines.
 
 [Create your first repository →](docs/GETTING_STARTED.md)
