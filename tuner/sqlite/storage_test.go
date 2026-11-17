@@ -2,10 +2,14 @@ package sqlite
 
 import (
 	"context"
-	"github.com/norarrsgd/gosmos/tuner"
+	"errors"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
+
+	"github.com/norarrsgd/gosmos/tuner"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -24,7 +28,16 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 func TestPathWithQueryCharacters(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "stats?mode=memory.db")
+	for _, name := range []string{"stats?mode=memory.db", "stats?_pragma=query_only(1).db", "stats#fragment.db", "stats%3Fencoded.db", "stats with spaces & unicode-雪.db"} {
+		t.Run(name, func(t *testing.T) {
+			testLiteralDatabasePath(t, name)
+		})
+	}
+}
+func testLiteralDatabasePath(t *testing.T, name string) {
+	t.Helper()
+	directory := t.TempDir()
+	path := filepath.Join(directory, name)
 	s, e := Open(path)
 	if e != nil {
 		t.Fatal(e)
@@ -41,6 +54,89 @@ func TestPathWithQueryCharacters(t *testing.T) {
 	rows, e := s.Samples(context.Background(), "q", time.Time{})
 	if e != nil || len(rows) != 1 {
 		t.Fatal(rows, e)
+	}
+	entries, e := os.ReadDir(directory)
+	if e != nil || len(entries) != 1 || entries[0].Name() != name {
+		t.Fatal("expected only the literal database filename:", entries, e)
+	}
+}
+func TestSecureParentSymlink(t *testing.T) {
+	directory := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "alias")
+	if e := os.Symlink(directory, alias); e != nil {
+		t.Fatal(e)
+	}
+	s, e := Open(filepath.Join(alias, "stats.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	if e = s.Record(context.Background(), tuner.Sample{Hash: "q", Timestamp: time.Now()}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = os.Stat(filepath.Join(directory, "stats.db")); e != nil {
+		t.Fatal(e)
+	}
+}
+func TestRejectsWritableParentBeforeCreatingDatabase(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses retained handles instead of Unix directory modes")
+	}
+	directory := t.TempDir()
+	if e := os.Chmod(directory, 0777); e != nil {
+		t.Fatal(e)
+	}
+	defer os.Chmod(directory, 0700)
+	path := filepath.Join(directory, "stats.db")
+	if s, e := Open(path); e == nil {
+		s.Close()
+		t.Fatal("opened a database in a replaceable directory")
+	}
+	if _, e := os.Lstat(path); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("database was created before rejecting its directory:", e)
+	}
+}
+func TestRejectsReplaceableParentSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses retained handles instead of Unix directory modes")
+	}
+	directory := t.TempDir()
+	replaceable := t.TempDir()
+	if e := os.Chmod(replaceable, 0777); e != nil {
+		t.Fatal(e)
+	}
+	defer os.Chmod(replaceable, 0700)
+	alias := filepath.Join(replaceable, "alias")
+	if e := os.Symlink(directory, alias); e != nil {
+		t.Fatal(e)
+	}
+	path := filepath.Join(alias, "stats.db")
+	if s, e := Open(path); e == nil {
+		s.Close()
+		t.Fatal("opened a database through a replaceable symlink")
+	}
+	if _, e := os.Lstat(filepath.Join(directory, "stats.db")); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("database was created before rejecting the symlink:", e)
+	}
+}
+func TestRejectsDatabaseSymlinkWithoutTouchingTarget(t *testing.T) {
+	directory := t.TempDir()
+	target := filepath.Join(directory, "target.db")
+	contents := []byte("not a database")
+	if e := os.WriteFile(target, contents, 0600); e != nil {
+		t.Fatal(e)
+	}
+	path := filepath.Join(directory, "stats.db")
+	if e := os.Symlink(target, path); e != nil {
+		t.Fatal(e)
+	}
+	if s, e := Open(path); e == nil {
+		s.Close()
+		t.Fatal("opened a database through a file symlink")
+	}
+	after, e := os.ReadFile(target)
+	if e != nil || string(after) != string(contents) {
+		t.Fatal("symlink target changed:", string(after), e)
 	}
 }
 func TestRetentionKeepsNewestSamples(t *testing.T) {

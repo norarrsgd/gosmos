@@ -61,7 +61,7 @@ func bulkItems(ctx context.Context, out io.Writer, galaxy *gosmos.Galaxy[product
 	result, executeErr := batch.Execute(ctx)
 	var committed []product
 	for _, item := range result.Items {
-		if item.Err == nil && item.Status >= 200 && item.Status < 300 {
+		if item.Committed {
 			committed = append(committed, item.Item)
 		}
 	}

@@ -167,4 +167,18 @@ Paths reject empty/dot-only input, excessive length, control characters, quotes/
 
 The builder does not prove that a property exists in your container schema, that an index supports a query, or that an account policy enables a search feature. Those are execution requirements, described in the feature guides.
 
+## Query construction budgets
+
+`query.Build`, fluent `GenerateQuery`, and repository execution share fixed local budgets. Oversized inputs return validation errors before SDK submission; no partial statement or bindings are returned. The exported constants live in `query`:
+
+- `MaxQueryNodes`: 1,024 total clusters, catalysts, comparison operands, selected columns, aggregates, sorting entries, group entries, joins, and projection items. Duplicates count toward the budget before deduplication.
+- `MaxQueryTextBytes`: 64 KiB total query metadata, including paths, aliases, output names, predicate IDs, operators, connectors, and ranking weights. Ordinary bound values are excluded.
+- `MaxQueryParameters`: 1,024 bindings, counting each `FTScore` term separately.
+- `MaxSQLBytes`: 256 KiB of generated SQL, including escaped output names and transformed source paths.
+- `MaxProjectionDepth`: 32 projection levels, including the root. Programmatic projections and JSON projections use the same depth, item, and metadata budgets.
+- `MaxProjectionJSONBytes`: 256 KiB per encoded projection. Decoding also bounds JSON container nesting, including unknown fields, before decoding the wire tree. Surrounding request whitespace and the enclosing input are the application's responsibility.
+- Full-text term arrays allow `MaxFullTextTerms` (64) terms per predicate and `MaxFullTextTermBytes` (1,024) bytes per term, with `MaxFullTextBytes` (64 KiB) total term bytes across the query.
+
+Projection JSON keeps the same `items`, `name`, `column`, `alias`, `aggregate`, and `object` representation. A failed decode leaves the existing projection unchanged. Apply request-body and ordinary parameter-value limits in the application as well; these generation budgets do not bound arbitrary bound arrays, maps, or document values.
+
 [Next: fluent projections →](FLUENT_QUERY_BUILDER.md#projections)

@@ -94,6 +94,7 @@ All paths in this section are under `query/`.
 - `projection.go`: structured field/object/aggregate projections and expression rendering.
 - `ranking.go`: ordering, vector/full-text ranking, and reciprocal rank fusion.
 - `identifier.go`: property/alias validation, bracket formatting, and derived output aliases.
+- `limits.go`: preflight structural/metadata/parameter/full-text budgets and bounded projection traversal, shared by standalone and repository query generation.
 - `normalize.go`: quote-aware parameter normalization for fixture comparison, cache signatures, and statistics hashes.
 - `catalyst_json.go`, `projection_json.go`: JSON representations of structured inputs.
 
@@ -101,11 +102,17 @@ Values belong in bindings, not interpolated SQL. Source identifiers are validate
 
 Parameter names are opaque and distinguish predicate occurrences, even when values match. Use the bindings returned with the statement. `Normalize` replaces parameters outside quoted text in first-occurrence order, preserves repeated references, and returns the original unique names. Do not replace it with a regular-expression substitution.
 
+Generation preflights at most 1,024 combined structural nodes, 64 KiB of metadata, and 1,024 parameters before rendering or hashing predicate IDs. Ordered deduplication uses membership maps; repeated binding identities use per-base suffix counters. Final SQL is limited to 256 KiB. Full-text arrays have at most 64 terms per predicate, 1,024 bytes per term, and 64 KiB total term bytes across a query. These are local library budgets, not Cosmos service limits; arbitrary ordinary parameter values still need application limits.
+
+Projection JSON uses a token preflight to cap container nesting and a single standard-library wire-tree decode, with no nested custom-decoder calls. JSON input/output is limited to 256 KiB per projection; tree conversion and programmatic `Build` share the 32-level depth, item-count, and metadata budgets. Failed JSON decoding preserves the previous projection. See `docs/DECLARATIVE_QUERY_SYNTAX.md` for the exported budget constants and counting rules.
+
 ## Entities, JSON, and partition keys
 
 `Entity` requires only an ID getter. ID generation and timestamps depend on optional `IDSetter` and `Stamper` interfaces. Embed `Base` by value to supply those capabilities; pointer-embedded capabilities are rejected during metadata inspection.
 
 Create and modify prepare an addressable top-level copy. Read the returned entity for generated IDs or timestamps. This is a shallow copy: custom capability methods must not assume nested pointers, maps, or slices were deep-cloned. `Modify` replaces the entire stored document; use `Patch` for targeted changes.
+
+Every create, modify, and batch model write requires the prepared JSON to be an object with exactly one top-level string `id` equal to `Entity.GetID()`. Missing, duplicate, non-string, or divergent serialized IDs fail with `ErrValidation` before transport. This keeps generated IDs and returned-copy semantics aligned with the identity Cosmos consumes for body-only create and upsert operations.
 
 Tagged partition keys use `gosmos:"pk=1"` through `pk=3`, with unique contiguous levels. Fields must be exported strings or string pointers and cannot be excluded from JSON. Null pointer values are invalid. JSON tags determine stored field names and provisioning paths; untagged anonymous value structs are traversed.
 
@@ -136,7 +143,9 @@ Read consistency precedence is operation override -> repository default -> SDK/a
 
 `Atomic` executes one transaction in one logical partition, with at most 100 operations and a 2 MiB estimated payload. Oversized batches fail before execution; splitting would change the transaction boundary. Model-derived keys must match the transaction key.
 
-`Bulk` groups by partition, chunks at the same operation/payload limits, and runs at most four partition pipelines concurrently. Chunks within a partition retain input order. A failed chunk stops later chunks in that partition; other partitions may continue. Earlier commits survive later errors or cancellation. Results preserve original order and identify unattempted operations; reconcile them before retrying. Transport errors can leave commit outcomes uncertain.
+`Bulk` accepts at most 10,000 operations or 64 MiB of aggregate estimated payload, groups them by a collision-safe partition identity in expected linear time, chunks at the atomic operation/payload limits, and runs at most four partition pipelines concurrently. Grouping and partition dispatch observe context cancellation. Chunks within a partition retain input order. A failed chunk stops later chunks in that partition; other partitions may continue. Earlier commits survive later errors or cancellation. Results preserve original order and identify unattempted operations; reconcile them before retrying. Transport errors can leave commit outcomes uncertain.
+
+Batch results keep service outcomes separate from local response decoding. `Committed` requires a successful transaction and a 2xx operation status. An incompatible returned resource body sets `DecodeError` without setting `Err` or the top-level execution error, so callers do not retry an already committed write; failed decoding also leaves any prepared entity intact instead of exposing a partially decoded value.
 
 `Patch` accepts one to ten operations and validates paths against entity structure. Dot notation and JSON Pointer notation use JSON field names; pointer escapes, array indices, and declared maps are supported. Paths cannot change `id` or root system properties beginning with `_`. Nil means JSON null, while `Remove` deletes a property. Patching does not invoke stamping hooks. Conditional filter predicates are not implemented.
 
@@ -165,7 +174,7 @@ Storage implementations share the contract in `tuner/storage.go`:
 - `memory.go`: latest 1,000 records per store.
 - `file.go`: latest 1,000 records per JSON file. Paths must be absolute and clean, the parent must exist, and existing files must be regular and owner-only. Construction resolves and pins parent-directory symlinks. Context-aware locks serialize aliases of the same on-disk file within one process, release canceled acquisitions before I/O, and remove idle entries. Use one writer process per file.
 - File writes use an owner-only temporary file and rename without `fsync`. Corrupt JSON moves to `.gosmos-corrupt-*` and history restarts empty. Backups are not pruned automatically; crash recovery can discard retained statistics.
-- `sqlite/storage.go`: optional pure-Go SQLite adapter, one connection, transactional insert/prune, and latest 10,000 rows across hashes. There is no background batching or application retry loop. The caller owns `Close` after repository use finishes.
+- `sqlite/storage.go`: optional pure-Go SQLite adapter, one connection, transactional insert/prune, and latest 10,000 rows across hashes. On Unix, construction requires a current-user-owned, non-group/world-writable parent and rejects replaceable directory-chain entries. Construction retains the resolved directory and database handles and verifies SQLite's live main database is the same regular, owner-only file before schema initialization. The driver receives an escaped `file:` URI so filename characters cannot become connection options or redirect the database. There is no background batching or application retry loop. The caller owns `Close` after repository use finishes.
 
 Statistics paths are application configuration, not request inputs. `WithRecordQueries(true)` is separate from statistics and attaches SQL plus bindings to `Gravity.Query`; it defaults off. `GenerateQuery` always exposes bindings. Avoid logging sensitive values.
 
@@ -180,17 +189,18 @@ go test -race ./...
 (cd tuner/sqlite && go test -race ./...)
 ```
 
-CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
+Executable GitHub Actions are pinned to full commit SHAs with release comments, and checkout credential persistence is disabled; bump the pins only through reviewed changes. CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, `FuzzBuild`, and `FuzzProjectionJSON` separately on a schedule and by manual dispatch.
 
 Add tests beside the package that owns the behavior:
 
-- `query/build_test.go`, `security_test.go`, and projection JSON tests: SQL shape, validation, injection attempts, naming policies, structured inputs, and normalization.
+- `query/build_test.go`, `security_test.go`, `limits_test.go`, and projection JSON tests: SQL shape, validation, injection attempts, naming policies, structured inputs, normalization, complexity/full-text budgets, and projection JSON depth/size/fuzz regressions.
 - `query/corpus_test.go` with `testdata/corpus/`: vendored SQL/binding/error regression cases. Normal Go tests need neither .NET nor Cosmos. `tools/sync-corpus` validates fixture metadata/schema; exporter requirements are in `tools/UniverseCorpusExporter/README.md`.
 - `internal/repository/*_test.go`: fake SDK containers for metadata, CRUD, consistency, paging, cache interaction, statistics, batches, and patch behavior.
 - `internal/exec/guard_test.go`: cross-partition rejection before SDK execution.
 - `internal/cache/cache_test.go`: FIFO, expiry, copying, and invalidation generations.
 - `tuner/storage_test.go` and `tuner/sqlite/storage_test.go`: storage, recommendations, paths/locks, retention, and transactional failure behavior.
 - `gosmos_test.go`: public facade compatibility. `examples/darkmatter/main_test.go` covers the example harness.
+- `tools/UniverseCorpusExporter.Tests`: optional .NET 10 console regression checks, run with `dotnet run --project tools/UniverseCorpusExporter.Tests`. Links the exporter's `FixtureOutput.cs` without Universe or third-party test packages. The exporter writes exclusively into a private user-temporary staging directory and publishes by directory move to a nonexistent output. Output and staging must share a filesystem, and their parents must be trusted. See its README for permissions and failure behavior; normal Go checks remain independent of .NET.
 
 Fake-container tests prove library behavior; they do not prove Cosmos feature availability or deployed indexing policies.
 

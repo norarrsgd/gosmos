@@ -7,7 +7,7 @@ using Universe.Builder.Options;
 const string PinnedCommit = "911dd588ad4f4a8c30e22469f93fc6af377f2d09";
 if (args.Length != 2 || args[0] != PinnedCommit)
     throw new ArgumentException("Usage: exporter 911dd588ad4f4a8c30e22469f93fc6af377f2d09 OUTPUT_DIRECTORY; verify the source checkout before building.");
-Directory.CreateDirectory(args[1]);
+using FixtureOutput fixtures = new(args[1]);
 JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
 List<(string Name, object Input)> cases = [];
 
@@ -98,8 +98,9 @@ foreach ((string name, object input) in cases) {
     bool reject = name.StartsWith("reject-");
     if (reject != (category is not null)) throw new InvalidOperationException($"Unexpected outcome for {name}: {sql ?? category}");
     object output = new { schemaVersion = 1, universeCommit = PinnedCommit, name, tags = new[] { reject ? "reject" : "parity" }, input = data, sql, @params = parameters, errorCategory = category };
-    File.WriteAllText(Path.Combine(args[1], name + ".json"), JsonSerializer.Serialize(output, jsonOptions) + "\n");
+    fixtures.Write(name + ".json", JsonSerializer.Serialize(output, jsonOptions) + "\n");
 }
+fixtures.Complete();
 Console.WriteLine($"Exported {cases.Count} cases from Universe {PinnedCommit}.");
 
 static string Text(JsonElement e, string name, string fallback = "") => e.TryGetProperty(name, out JsonElement p) && p.ValueKind == JsonValueKind.String ? p.GetString()! : fallback;
