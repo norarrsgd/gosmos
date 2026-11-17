@@ -54,6 +54,8 @@ for _, item := range result.Items {
     _ = item.Index
     _ = item.Status
     _ = item.ETag
+    _ = item.Committed
+    _ = item.DecodeError
     _ = item.Item
 }
 ```
@@ -72,13 +74,15 @@ bulk.Create(Order{TenantID: "tenant-1", Status: "open", Total: 10})
 bulk.Create(Order{TenantID: "tenant-2", Status: "open", Total: 20})
 result, executeErr := bulk.Execute(ctx)
 for _, item := range result.Items {
-    if item.Err != nil {
+    if !item.Committed {
         // Record or reconcile this operation using its original index.
         continue
     }
-    if item.Status >= 200 && item.Status < 300 {
-        _ = item.Item.GetID()
+    if item.DecodeError != nil {
+        // The operation committed, but the returned document was incompatible.
+        continue
     }
+    _ = item.Item.GetID()
 }
 if executeErr != nil {
     return executeErr
@@ -159,9 +163,13 @@ A nil value in `Set`, `Add`, or `Replace` is serialized as JSON null. It is diff
 | `Item` | Prepared or returned document, when available |
 | `Status` | Per-operation HTTP status; zero for unattempted operations |
 | `ETag` | Returned document ETag, when available |
+| `Committed` | Whether the service confirmed a successful transaction and 2xx operation status |
+| `DecodeError` | Local error decoding a returned resource body after commit |
 | `Err` | Operation failure, rollback, or unattempted reason |
 
 A batch-level validation failure marks included operations as failed/unattempted. SDK response errors remain reachable through the error chain. An item can contain its prepared entity even when it was not committed; do not treat a populated `Item.ID` as a success indicator.
+
+A `DecodeError` does not change `Committed`, populate `Err`, or make `Execute` return an operation error. Do not retry a committed operation because its returned resource body could not be decoded. On decode failure, `Item` retains the prepared entity when one was available rather than exposing a partially decoded document.
 
 ## Cache invalidation
 

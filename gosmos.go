@@ -54,7 +54,7 @@ type AtomicBatch[T Entity] = repository.AtomicBatch[T]
 // Successfully committed chunks remain committed if another chunk fails.
 type BulkBatch[T Entity] = repository.BulkBatch[T]
 
-// BatchItemResult preserves the original operation order, including unattempted items.
+// BatchItemResult preserves the original operation order and separates service outcomes from local decoding.
 type BatchItemResult[T Entity] = repository.BatchItemResult[T]
 type BatchResult[T Entity] = repository.BatchResult[T]
 type Patch[T Entity] = repository.Patch[T]
