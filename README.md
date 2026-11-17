@@ -99,6 +99,7 @@ Other limits:
 - Partition keys contain one to three string components; partial hierarchical keys are not supported.
 - `Atomic` is one same-partition transaction. `Bulk` may partially succeed across transaction chunks.
 - Grouped or aggregate queries cannot also request ordering or ranking.
+- Query generation enforces [complexity, projection, and full-text budgets](docs/DECLARATIVE_QUERY_SYNTAX.md#query-construction-budgets) before execution.
 - Explicit read consistency cannot strengthen the account's consistency setting.
 - Stored procedures, conditional patch filter predicates, and automatic application of tuner recommendations are not supported.
 

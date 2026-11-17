@@ -26,6 +26,21 @@ func TestQueryRejectsCrossPartitionBeforeTransport(t *testing.T) {
 	}
 }
 
+func TestQueryBudgetRejectsBeforeTransport(t *testing.T) {
+	f := &pagedFake{}
+	g := &Galaxy[testQueryEntity]{container: f}
+	terms := make([]string, 65)
+	for i := range terms {
+		terms[i] = "word"
+	}
+	_, _, err := g.Query().Cluster(func(c *ClusterBuilder) {
+		c.FTScore("text", terms)
+	}).Top(1).InPartition("tenant").List(context.Background())
+	if !errors.Is(err, ErrValidation) || f.opts != nil || f.calls != 0 {
+		t.Fatalf("oversized query reached transport: error=%v, calls=%d, options=%+v", err, f.calls, f.opts)
+	}
+}
+
 type testQueryEntity struct {
 	Base
 	Tenant string `json:"tenant" gosmos:"pk=1"`
