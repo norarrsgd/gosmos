@@ -44,7 +44,7 @@ Requires Go 1.27. The Cosmos SDK is `github.com/Azure/azure-sdk-for-go/sdk/data/
 |   |-- sync-corpus/           Fixture validation and import tool
 |   `-- UniverseCorpusExporter/ Optional .NET fixture generator
 |-- docs/                      Task-focused public guides
-`-- .github/workflows/         Go CI and scheduled fuzzing
+`-- .github/workflows/         Go CI, Semgrep, and scheduled fuzzing
 ```
 
 ## Architecture and dependency boundaries
@@ -180,7 +180,7 @@ go test -race ./...
 (cd tuner/sqlite && go test -race ./...)
 ```
 
-CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
+CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
 
 Add tests beside the package that owns the behavior:
 
