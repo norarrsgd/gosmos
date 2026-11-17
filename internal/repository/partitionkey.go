@@ -13,9 +13,10 @@ type keyField struct {
 	path  string
 }
 type entityMetadata struct {
-	fields   []keyField
-	override bool
-	name     string
+	fields         []keyField
+	componentCount int
+	override       bool
+	name           string
 }
 type metadataResult struct {
 	metadata entityMetadata
@@ -104,13 +105,13 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 		}
 		return nil
 	}
-	if m.override {
-		return m, nil
-	}
 	if err := walk(base, nil, ""); err != nil {
 		return m, err
 	}
 	if len(numbered) == 0 {
+		if m.override {
+			return m, nil
+		}
 		return m, validation("entity requires partition key tags or PartitionKeyer")
 	}
 	for n := 1; n <= len(numbered); n++ {
@@ -120,8 +121,24 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 		}
 		m.fields = append(m.fields, f)
 	}
+	m.componentCount = len(m.fields)
 	return m, nil
 }
+
+func (m entityMetadata) withPartitionKeyCount(count int) (entityMetadata, error) {
+	if count == 0 {
+		return m, nil
+	}
+	if !m.override {
+		return m, validation("WithPartitionKeyCount requires PartitionKeyer")
+	}
+	if m.componentCount > 0 && m.componentCount != count {
+		return m, validation("partition key count %d conflicts with %d tagged components", count, m.componentCount)
+	}
+	m.componentCount = count
+	return m, nil
+}
+
 func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) {
 	if m.override {
 		p, ok := value.Interface().(PartitionKeyer)
@@ -131,7 +148,7 @@ func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) 
 		if !ok {
 			return azcosmos.PartitionKey{}, validation("PartitionKeyer unavailable")
 		}
-		return stringKey(p.PartitionKeyValues(), 0)
+		return stringKey(p.PartitionKeyValues(), m.componentCount)
 	}
 	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
@@ -149,6 +166,14 @@ func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) 
 	}
 	return key, nil
 }
+
+func (m entityMetadata) explicitKey(values []string) (azcosmos.PartitionKey, error) {
+	if m.componentCount == 0 {
+		return azcosmos.NewPartitionKey(), validation("explicit partition keys require partition key tags or WithPartitionKeyCount")
+	}
+	return stringKey(values, m.componentCount)
+}
+
 func stringKey(values []string, expected int) (azcosmos.PartitionKey, error) {
 	key := azcosmos.NewPartitionKey()
 	if len(values) < 1 || len(values) > 3 || (expected > 0 && len(values) != expected) {

@@ -44,6 +44,10 @@ func New[T Entity](client *azcosmos.Client, database, container string, options 
 			return nil, wrapError("new", m.name, err)
 		}
 	}
+	m, err = m.withPartitionKeyCount(config.partitionKeyCount)
+	if err != nil {
+		return nil, wrapError("new", m.name, err)
+	}
 	c, err := client.NewContainer(database, container)
 	if err != nil {
 		return nil, wrapError("new", m.name, err)

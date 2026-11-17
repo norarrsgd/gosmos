@@ -48,4 +48,10 @@ func TestNewDoesNotPerformIO(t *testing.T) {
 	if _, err = New[testEntity](client, "db", "items", WithConsistency(azcosmos.ConsistencyLevel("bad"))); !errors.Is(err, ErrValidation) {
 		t.Fatal(err)
 	}
+	if _, err = New[overrideEntity](client, "db", "items", WithPartitionKeyCount(1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = New[overrideEntity](client, "db", "items", WithPartitionKeyCount(0)); !errors.Is(err, ErrValidation) {
+		t.Fatal(err)
+	}
 }

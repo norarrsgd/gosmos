@@ -9,13 +9,14 @@ import (
 )
 
 type galaxyOptions struct {
-	namingPolicy   func(string) string
-	statistics     tuner.Storage
-	cache          *cache.Cache
-	consistency    *azcosmos.ConsistencyLevel
-	recordQueries  bool
-	crossPartition bool
-	autoProvision  bool
+	namingPolicy      func(string) string
+	statistics        tuner.Storage
+	cache             *cache.Cache
+	consistency       *azcosmos.ConsistencyLevel
+	recordQueries     bool
+	crossPartition    bool
+	autoProvision     bool
+	partitionKeyCount int
 }
 
 type Option func(*galaxyOptions) error
@@ -62,6 +63,17 @@ func WithRecordQueries(enabled bool) Option {
 
 func WithCrossPartition(enabled bool) Option {
 	return func(o *galaxyOptions) error { o.crossPartition = enabled; return nil }
+}
+
+// WithPartitionKeyCount declares the complete key width for an untagged PartitionKeyer.
+func WithPartitionKeyCount(count int) Option {
+	return func(o *galaxyOptions) error {
+		if count < 1 || count > 3 {
+			return validation("partition key count must be 1 to 3")
+		}
+		o.partitionKeyCount = count
+		return nil
+	}
 }
 
 // WithAutoProvision enables explicit EnsureProvisioned calls; construction never performs I/O.

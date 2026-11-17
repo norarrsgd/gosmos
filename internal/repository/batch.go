@@ -172,7 +172,7 @@ func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[
 	if b.key != nil {
 		key = *b.key
 	} else {
-		key, err = stringKey(pk, len(b.galaxy.metadata.fields))
+		key, err = b.galaxy.metadata.explicitKey(pk)
 		if err != nil {
 			b.err = err
 			return

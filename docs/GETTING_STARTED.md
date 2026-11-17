@@ -239,7 +239,14 @@ func (d *Document) SetID(id string) { d.ID = id }
 func (d Document) PartitionKeyValues() []string { return []string{d.Tenant} }
 ```
 
-`PartitionKeyer` takes precedence over tag extraction for document writes. Point reads still take explicit key components. `IDSetter` enables generated IDs; without it, create requires an existing ID. `Stamper` provides `StampCreate(time.Time)` and `StampModify(time.Time)` hooks. Custom partition-key extraction does not provide a container schema for auto-provisioning.
+`PartitionKeyer` takes precedence over tag extraction for document writes. Because this example has no partition-key tags, declare its complete key width when constructing the repository:
+
+```go
+documents, err := gosmos.New[Document](client, "app", "documents",
+    gosmos.WithPartitionKeyCount(1))
+```
+
+The count must be one to three. Alternatively, valid `gosmos:"pk=N"` tags on a `PartitionKeyer` entity declare the width while the interface still supplies write values. Point reads and queries reject explicit keys when the width is unknown or incomplete. `IDSetter` enables generated IDs; without it, create requires an existing ID. `Stamper` provides `StampCreate(time.Time)` and `StampModify(time.Time)` hooks. `WithPartitionKeyCount` does not provide container paths, so custom partition-key extraction still cannot auto-provision a container.
 
 ## Provision explicitly
 

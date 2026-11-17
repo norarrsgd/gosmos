@@ -29,6 +29,8 @@ _ = gravity
 
 For a two-level hierarchical key, supply both values in schema order: `InPartition("tenant-1", "APAC")`. A prefix is not a complete logical partition. Point reads take the same ordered components as a `[]string`.
 
+Gosmos derives the required width from partition-key tags. An untagged `PartitionKeyer` must declare it with `WithPartitionKeyCount`; otherwise explicit point and query keys fail before a request. A declared or tagged width is enforced exactly before the query is classified as single-partition.
+
 Without a key, the SDK gateway handles eligible simple shapes. `WithCrossPartition(false)` disables that path entirely. The [shape matrix](CROSS_PARTITION.md) describes which queries require a key.
 
 `GenerateQuery` does not enforce that matrix: it can return SQL for a shape that execution would reject without a partition key.

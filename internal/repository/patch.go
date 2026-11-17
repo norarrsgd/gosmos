@@ -181,7 +181,7 @@ func (g *Galaxy[T]) Patch(ctx context.Context, id string, pk []string, build fun
 	if strings.TrimSpace(id) == "" || build == nil {
 		return Gravity{}, g.failure("patch", validation("document ID and patch callback are required"))
 	}
-	key, err := stringKey(pk, len(g.metadata.fields))
+	key, err := g.metadata.explicitKey(pk)
 	if err != nil {
 		return Gravity{}, g.failure("patch", err)
 	}
