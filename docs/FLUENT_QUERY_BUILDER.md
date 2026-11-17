@@ -280,6 +280,8 @@ _ = statement.Shape
 
 `GenerateQuery` performs no I/O and does not apply the cross-partition execution guard. Build an unsupported cross-partition shape to inspect its SQL, then supply `InPartition` before executing it.
 
+Generation and execution both enforce the shared [query construction budgets](DECLARATIVE_QUERY_SYNTAX.md#query-construction-budgets), including projection depth and full-text term limits. Budget failures wrap `gosmos.ErrValidation` before a database request.
+
 ## Choose an execution method
 
 | Method | Result |

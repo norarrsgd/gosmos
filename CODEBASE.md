@@ -94,12 +94,17 @@ All paths in this section are under `query/`.
 - `projection.go`: structured field/object/aggregate projections and expression rendering.
 - `ranking.go`: ordering, vector/full-text ranking, and reciprocal rank fusion.
 - `identifier.go`: property/alias validation, bracket formatting, and derived output aliases.
+- `limits.go`: preflight structural/metadata/parameter/full-text budgets and bounded projection traversal, shared by standalone and repository query generation.
 - `normalize.go`: quote-aware parameter normalization for fixture comparison, cache signatures, and statistics hashes.
 - `catalyst_json.go`, `projection_json.go`: JSON representations of structured inputs.
 
 Values belong in bindings, not interpolated SQL. Source identifiers are validated before bracket formatting, including after naming-policy transformation. New identifier-bearing inputs must use those checks; new predicates and projections must keep shape flags accurate so execution policy cannot be bypassed.
 
 Parameter names are opaque and distinguish predicate occurrences, even when values match. Use the bindings returned with the statement. `Normalize` replaces parameters outside quoted text in first-occurrence order, preserves repeated references, and returns the original unique names. Do not replace it with a regular-expression substitution.
+
+Generation preflights at most 1,024 combined structural nodes, 64 KiB of metadata, and 1,024 parameters before rendering or hashing predicate IDs. Ordered deduplication uses membership maps; repeated binding identities use per-base suffix counters. Final SQL is limited to 256 KiB. Full-text arrays have at most 64 terms per predicate, 1,024 bytes per term, and 64 KiB total term bytes across a query. These are local library budgets, not Cosmos service limits; arbitrary ordinary parameter values still need application limits.
+
+Projection JSON uses a token preflight to cap container nesting and a single standard-library wire-tree decode, with no nested custom-decoder calls. JSON input/output is limited to 256 KiB per projection; tree conversion and programmatic `Build` share the 32-level depth, item-count, and metadata budgets. Failed JSON decoding preserves the previous projection. See `docs/DECLARATIVE_QUERY_SYNTAX.md` for the exported budget constants and counting rules.
 
 ## Entities, JSON, and partition keys
 
@@ -180,17 +185,18 @@ go test -race ./...
 (cd tuner/sqlite && go test -race ./...)
 ```
 
-CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
+CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, `FuzzBuild`, and `FuzzProjectionJSON` separately on a schedule and by manual dispatch.
 
 Add tests beside the package that owns the behavior:
 
-- `query/build_test.go`, `security_test.go`, and projection JSON tests: SQL shape, validation, injection attempts, naming policies, structured inputs, and normalization.
+- `query/build_test.go`, `security_test.go`, `limits_test.go`, and projection JSON tests: SQL shape, validation, injection attempts, naming policies, structured inputs, normalization, complexity/full-text budgets, and projection JSON depth/size/fuzz regressions.
 - `query/corpus_test.go` with `testdata/corpus/`: vendored SQL/binding/error regression cases. Normal Go tests need neither .NET nor Cosmos. `tools/sync-corpus` validates fixture metadata/schema; exporter requirements are in `tools/UniverseCorpusExporter/README.md`.
 - `internal/repository/*_test.go`: fake SDK containers for metadata, CRUD, consistency, paging, cache interaction, statistics, batches, and patch behavior.
 - `internal/exec/guard_test.go`: cross-partition rejection before SDK execution.
 - `internal/cache/cache_test.go`: FIFO, expiry, copying, and invalidation generations.
 - `tuner/storage_test.go` and `tuner/sqlite/storage_test.go`: storage, recommendations, paths/locks, retention, and transactional failure behavior.
 - `gosmos_test.go`: public facade compatibility. `examples/darkmatter/main_test.go` covers the example harness.
+- `tools/UniverseCorpusExporter.Tests`: optional .NET 10 console regression checks, run with `dotnet run --project tools/UniverseCorpusExporter.Tests`. Links the exporter's `FixtureOutput.cs` without Universe or third-party test packages. The exporter writes exclusively into a private user-temporary staging directory and publishes by directory move to a nonexistent output. Output and staging must share a filesystem, and their parents must be trusted. See its README for permissions and failure behavior; normal Go checks remain independent of .NET.
 
 Fake-container tests prove library behavior; they do not prove Cosmos feature availability or deployed indexing policies.
 

@@ -108,10 +108,7 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 	if err := walk(base, nil, ""); err != nil {
 		return m, err
 	}
-	if len(numbered) == 0 {
-		if m.override {
-			return m, nil
-		}
+	if len(numbered) == 0 && !m.override {
 		return m, validation("entity requires partition key tags or PartitionKeyer")
 	}
 	for n := 1; n <= len(numbered); n++ {

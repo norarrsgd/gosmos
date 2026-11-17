@@ -231,7 +231,7 @@ Keys support one to three string components. Duplicate levels, gaps, non-string 
 ```go
 type Document struct {
     ID     string `json:"id"`
-    Tenant string `json:"tenant"`
+    Tenant string `json:"tenant" gosmos:"pk=1"`
 }
 
 func (d Document) GetID() string { return d.ID }
