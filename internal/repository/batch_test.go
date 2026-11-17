@@ -177,6 +177,85 @@ func TestCommittedBatchDecodeFailureIsSeparated(t *testing.T) {
 		}
 	})
 }
+func TestBulkAdmissionLimits(t *testing.T) {
+	t.Run("operation count", func(t *testing.T) {
+		g, _ := testGalaxy(t)
+		f := &chunkFake{}
+		g.container = f
+		b := g.Bulk()
+		if b.builder.operationLimit != bulkMaxOperations || b.builder.byteLimit != bulkMaxBytes {
+			t.Fatalf("limits=%d/%d", b.builder.operationLimit, b.builder.byteLimit)
+		}
+		b.builder.operationLimit = 2
+		b.Create(testEntity{Tenant: "t"}).Create(testEntity{Tenant: "t"}).Create(testEntity{Tenant: "t"})
+		result, err := b.Execute(context.Background())
+		if !errors.Is(err, ErrValidation) || len(result.Items) != 2 || len(f.sizes) != 0 {
+			t.Fatalf("items=%d calls=%v err=%v", len(result.Items), f.sizes, err)
+		}
+	})
+	t.Run("aggregate bytes", func(t *testing.T) {
+		g, _ := testGalaxy(t)
+		f := &chunkFake{}
+		g.container = f
+		b := g.Bulk().Create(testEntity{Tenant: "t"})
+		b.builder.byteLimit = 1 + b.builder.estimatedBytes
+		b.Create(testEntity{Tenant: "t"})
+		result, err := b.Execute(context.Background())
+		if !errors.Is(err, ErrValidation) || len(result.Items) != 1 || len(f.sizes) != 0 {
+			t.Fatalf("items=%d calls=%v err=%v", len(result.Items), f.sizes, err)
+		}
+	})
+}
+func TestBulkCancellationBeforeGrouping(t *testing.T) {
+	g, _ := testGalaxy(t)
+	f := &chunkFake{}
+	g.container = f
+	b := g.Bulk()
+	for i := range 50 {
+		b.Create(testEntity{Tenant: fmt.Sprintf("t%d", i)})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result, err := b.Execute(ctx)
+	if !errors.Is(err, context.Canceled) || len(f.sizes) != 0 || len(result.Items) != 50 {
+		t.Fatalf("items=%d calls=%v err=%v", len(result.Items), f.sizes, err)
+	}
+	for i, item := range result.Items {
+		if !errors.Is(item.Err, context.Canceled) {
+			t.Fatalf("item %d: %v", i, item.Err)
+		}
+	}
+}
+func TestBulkCancellationStopsDispatch(t *testing.T) {
+	g, _ := testGalaxy(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &chunkFake{cancel: cancel}
+	g.container = f
+	b := g.Bulk()
+	for i := range 50 {
+		b.Create(testEntity{Tenant: fmt.Sprintf("t%d", i)})
+	}
+	result, err := b.Execute(ctx)
+	if !errors.Is(err, context.Canceled) || len(f.sizes) == 0 || len(f.sizes) > 4 {
+		t.Fatalf("calls=%v err=%v", f.sizes, err)
+	}
+	for i, item := range result.Items {
+		if item.Status == 0 && !errors.Is(item.Err, context.Canceled) {
+			t.Fatalf("unattempted item %d: %v", i, item.Err)
+		}
+	}
+}
+func TestPartitionIdentitySeparatesComponents(t *testing.T) {
+	if partitionIdentity([]string{"ab", "c"}) == partitionIdentity([]string{"a", "bc"}) {
+		t.Fatal("component boundaries collided")
+	}
+	if partitionIdentity([]string{string([]byte{0xff})}) == partitionIdentity([]string{"�"}) {
+		t.Fatal("invalid UTF-8 collided")
+	}
+	if partitionIdentity([]string{"tenant", "region"}) != partitionIdentity([]string{"tenant", "region"}) {
+		t.Fatal("equal components produced distinct identities")
+	}
+}
 func TestBatchFailuresAndSize(t *testing.T) {
 	g, _ := testGalaxy(t)
 	f := &chunkFake{status: 409}

@@ -9,10 +9,10 @@ Choose `Atomic` for one same-partition transaction, `Bulk` for partition-chunked
 | API | Transaction boundary | Limits | Failure behavior |
 |---|---|---|---|
 | `Atomic(pk...)` | All operations in one logical partition | 100 operations, 2 MiB estimated payload | One transaction; no chunking |
-| `Bulk()` | Each chunk within one logical partition | 100 operations and 2 MiB per chunk | Earlier chunks may remain committed |
+| `Bulk()` | Each chunk within one logical partition | 10,000 operations and 64 MiB estimated payload overall; 100 operations and 2 MiB per chunk | Earlier chunks may remain committed |
 | `Galaxy.Patch` | One document update | 10 patch operations | SDK item error |
 
-Bulk processes at most four partitions concurrently. Chunks for a partition execute in original operation order. The four-worker limit is not changed by query execution hints.
+Bulk rejects additions beyond either overall limit before execution. It processes at most four partitions concurrently, observes cancellation while grouping and dispatching partitions, and executes chunks for a partition in original operation order. The four-worker limit is not changed by query execution hints.
 
 ## Replace with an ETag
 

@@ -49,7 +49,8 @@ type Hints = repository.Hints
 // AtomicBatch executes all operations in a single logical partition transaction.
 type AtomicBatch[T Entity] = repository.AtomicBatch[T]
 
-// BulkBatch executes ordered transaction chunks per partition, at most four partitions at once.
+// BulkBatch accepts at most 10,000 operations or 64 MiB of estimated payload and executes
+// ordered transaction chunks per partition, at most four partitions at once.
 // Successfully committed chunks remain committed if another chunk fails.
 type BulkBatch[T Entity] = repository.BulkBatch[T]
 
