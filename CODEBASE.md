@@ -180,7 +180,7 @@ go test -race ./...
 (cd tuner/sqlite && go test -race ./...)
 ```
 
-CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
+CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. Executable GitHub Actions are pinned to full commit SHAs with release comments, and checkout credential persistence is disabled; bump the pins only through reviewed changes. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, and `FuzzBuild` separately on a schedule and by manual dispatch.
 
 Add tests beside the package that owns the behavior:
 
