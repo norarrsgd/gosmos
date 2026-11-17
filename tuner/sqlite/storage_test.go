@@ -28,7 +28,16 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 func TestPathWithQueryCharacters(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "stats?mode=memory.db")
+	for _, name := range []string{"stats?mode=memory.db", "stats?_pragma=query_only(1).db", "stats#fragment.db", "stats%3Fencoded.db", "stats with spaces & unicode-雪.db"} {
+		t.Run(name, func(t *testing.T) {
+			testLiteralDatabasePath(t, name)
+		})
+	}
+}
+func testLiteralDatabasePath(t *testing.T, name string) {
+	t.Helper()
+	directory := t.TempDir()
+	path := filepath.Join(directory, name)
 	s, e := Open(path)
 	if e != nil {
 		t.Fatal(e)
@@ -45,6 +54,10 @@ func TestPathWithQueryCharacters(t *testing.T) {
 	rows, e := s.Samples(context.Background(), "q", time.Time{})
 	if e != nil || len(rows) != 1 {
 		t.Fatal(rows, e)
+	}
+	entries, e := os.ReadDir(directory)
+	if e != nil || len(entries) != 1 || entries[0].Name() != name {
+		t.Fatal("expected only the literal database filename:", entries, e)
 	}
 }
 func TestSecureParentSymlink(t *testing.T) {

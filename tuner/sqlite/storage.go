@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -62,7 +63,9 @@ func Open(path string) (*Storage, error) {
 		}
 	}()
 
-	db, e := sql.Open("sqlite", path)
+	// Escape path characters so the driver cannot interpret them as DSN options.
+	dsn := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	db, e := sql.Open("sqlite", dsn.String())
 	if e != nil {
 		return nil, e
 	}
