@@ -52,6 +52,34 @@ func TestAtomicSuccess(t *testing.T) {
 	}
 }
 
+func TestBatchRejectsDivergentSerializedID(t *testing.T) {
+	m, err := inspectEntity[shadowIDEntity]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &batchFake{}
+	g := &Galaxy[shadowIDEntity]{container: f, metadata: m}
+	item := shadowIDEntity{Base: Base{ID: "trusted"}, BodyID: "attacker", Tenant: "t"}
+
+	for _, test := range []struct {
+		name    string
+		execute func() error
+	}{
+		{name: "atomic create", execute: func() error { _, err := g.Atomic("t").Create(item).Execute(context.Background()); return err }},
+		{name: "atomic replace", execute: func() error { _, err := g.Atomic("t").Replace(item).Execute(context.Background()); return err }},
+		{name: "atomic upsert", execute: func() error { _, err := g.Atomic("t").Upsert(item).Execute(context.Background()); return err }},
+		{name: "bulk create", execute: func() error { _, err := g.Bulk().Create(item).Execute(context.Background()); return err }},
+		{name: "bulk replace", execute: func() error { _, err := g.Bulk().Replace(item).Execute(context.Background()); return err }},
+		{name: "bulk upsert", execute: func() error { _, err := g.Bulk().Upsert(item).Execute(context.Background()); return err }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.execute(); !errors.Is(err, ErrValidation) || f.calls != 0 {
+				t.Fatalf("calls=%d err=%v", f.calls, err)
+			}
+		})
+	}
+}
+
 type chunkFake struct {
 	fakeContainer
 	mu                sync.Mutex

@@ -112,6 +112,8 @@ Projection JSON uses a token preflight to cap container nesting and a single sta
 
 Create and modify prepare an addressable top-level copy. Read the returned entity for generated IDs or timestamps. This is a shallow copy: custom capability methods must not assume nested pointers, maps, or slices were deep-cloned. `Modify` replaces the entire stored document; use `Patch` for targeted changes.
 
+Every create, modify, and batch model write requires the prepared JSON to be an object with exactly one top-level string `id` equal to `Entity.GetID()`. Missing, duplicate, non-string, or divergent serialized IDs fail with `ErrValidation` before transport. This keeps generated IDs and returned-copy semantics aligned with the identity Cosmos consumes for body-only create and upsert operations.
+
 Tagged partition keys use `gosmos:"pk=1"` through `pk=3`, with unique contiguous levels. Fields must be exported strings or string pointers and cannot be excluded from JSON. Null pointer values are invalid. JSON tags determine stored field names and provisioning paths; untagged anonymous value structs are traversed.
 
 `PartitionKeyer` overrides tagged extraction for writes. Partition-key tags still declare the complete component count; an untagged `PartitionKeyer` must use `WithPartitionKeyCount` before explicit point/query keys can execute. Unknown widths and partial hierarchical keys fail before transport. The option declares width only and does not provide provisioning paths.

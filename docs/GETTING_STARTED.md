@@ -62,6 +62,8 @@ type Order struct {
 
 Embed `Base` by value. Anonymous pointer embeddings are rejected. JSON tags define stored names; query paths and patch paths use those names, not Go field names.
 
+Full-document writes require the serialized entity to contain exactly one top-level string `id` equal to `GetID()`. Gosmos rejects missing, duplicate, non-string, or mismatched IDs before making a request, so do not shadow `Base.ID` with another `json:"id"` field or emit a different ID from custom JSON marshaling.
+
 ## Supply a client
 
 This account-key example reads the caller's environment. Set `GOSMOS_ENDPOINT` and `GOSMOS_KEY` through your existing secret-management process before executing it.

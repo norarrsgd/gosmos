@@ -118,12 +118,12 @@ func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
 		b.err = err
 		return
 	}
-	body, err := json.Marshal(copy)
+	body, id, err := marshalEntity(copy)
 	if err != nil {
 		b.err = err
 		return
 	}
-	b.add(batchOperation[T]{kind: kind, id: copy.GetID(), key: key, groupKey: partitionIdentity(keyValues), body: body, item: copy}, options)
+	b.add(batchOperation[T]{kind: kind, id: id, key: key, groupKey: partitionIdentity(keyValues), body: body, item: copy}, options)
 }
 
 func (b *batchBuilder[T]) add(operation batchOperation[T], options []WriteOption) {

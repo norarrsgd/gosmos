@@ -7,7 +7,8 @@ import (
 	"github.com/norarrsgd/gosmos/internal/repository"
 )
 
-// Entity is the minimal document contract.
+// Entity is the minimal document contract. GetID must match the single
+// top-level string id emitted by JSON marshaling for full-document writes.
 type Entity = repository.Entity
 
 type IDSetter = repository.IDSetter
