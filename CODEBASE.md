@@ -44,7 +44,7 @@ Requires Go 1.27. The Cosmos SDK is `github.com/Azure/azure-sdk-for-go/sdk/data/
 |   |-- sync-corpus/           Fixture validation and import tool
 |   `-- UniverseCorpusExporter/ Optional .NET fixture generator
 |-- docs/                      Task-focused public guides
-`-- .github/workflows/         Go CI and scheduled fuzzing
+`-- .github/workflows/         Go CI, Semgrep, and scheduled fuzzing
 ```
 
 ## Architecture and dependency boundaries
@@ -114,7 +114,7 @@ Create and modify prepare an addressable top-level copy. Read the returned entit
 
 Tagged partition keys use `gosmos:"pk=1"` through `pk=3`, with unique contiguous levels. Fields must be exported strings or string pointers and cannot be excluded from JSON. Null pointer values are invalid. JSON tags determine stored field names and provisioning paths; untagged anonymous value structs are traversed.
 
-`PartitionKeyer` overrides tagged extraction for writes, while valid tags are retained as schema metadata and enforce the exact component count for both overridden writes and explicit keys. Partition-scoped queries require tags even for `PartitionKeyer` entities; an unknown width is rejected before the execution guard or SDK pager. Untagged overrides still support writes, explicit point operations, and eligible keyless queries. Partial hierarchical keys are not supported. Tags must describe the actual container partition-key schema; construction does not verify it against the service.
+`PartitionKeyer` overrides tagged extraction for writes. Partition-key tags still declare the complete component count; an untagged `PartitionKeyer` must use `WithPartitionKeyCount` before explicit point/query keys can execute. Unknown widths and partial hierarchical keys fail before transport. The option declares width only and does not provide provisioning paths.
 
 `WithNamingPolicy` transforms source query path segments. It does not change entity JSON serialization or explicit projection output names. Keep query paths and stored JSON consistent. `SelectAs[R]` selects result-struct JSON field names; `ListAs[R]`, `GetAs[R]`, and `PagedAs[R]` only choose the decoding type and do not infer a projection. Use `Project` for nested output shapes and computed expressions.
 
@@ -141,7 +141,7 @@ Read consistency precedence is operation override -> repository default -> SDK/a
 
 `Atomic` executes one transaction in one logical partition, with at most 100 operations and a 2 MiB estimated payload. Oversized batches fail before execution; splitting would change the transaction boundary. Model-derived keys must match the transaction key.
 
-`Bulk` groups by partition, chunks at the same operation/payload limits, and runs at most four partition pipelines concurrently. Chunks within a partition retain input order. A failed chunk stops later chunks in that partition; other partitions may continue. Earlier commits survive later errors or cancellation. Results preserve original order and identify unattempted operations; reconcile them before retrying. Transport errors can leave commit outcomes uncertain.
+`Bulk` accepts at most 10,000 operations or 64 MiB of aggregate estimated payload, groups them by a collision-safe partition identity in expected linear time, chunks at the atomic operation/payload limits, and runs at most four partition pipelines concurrently. Grouping and partition dispatch observe context cancellation. Chunks within a partition retain input order. A failed chunk stops later chunks in that partition; other partitions may continue. Earlier commits survive later errors or cancellation. Results preserve original order and identify unattempted operations; reconcile them before retrying. Transport errors can leave commit outcomes uncertain.
 
 `Patch` accepts one to ten operations and validates paths against entity structure. Dot notation and JSON Pointer notation use JSON field names; pointer escapes, array indices, and declared maps are supported. Paths cannot change `id` or root system properties beginning with `_`. Nil means JSON null, while `Remove` deletes a property. Patching does not invoke stamping hooks. Conditional filter predicates are not implemented.
 
@@ -185,7 +185,7 @@ go test -race ./...
 (cd tuner/sqlite && go test -race ./...)
 ```
 
-CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, `FuzzBuild`, and `FuzzProjectionJSON` separately on a schedule and by manual dispatch.
+CI also checks `gofmt` across tracked Go files and runs `go run ./examples/query`. `.github/workflows/semgrep.yml` scans PRs and pushes to `main` with the pinned Semgrep 1.185.0 container digest and the `go/` rules from `semgrep/semgrep-rules` at commit `a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2` (same pins as Universe), fails on findings, and uploads SARIF; bump the pins only through reviewed changes. `.github/workflows/fuzz.yml` runs `FuzzValidateIdentifier`, `FuzzNormalize`, `FuzzBuild`, and `FuzzProjectionJSON` separately on a schedule and by manual dispatch.
 
 Add tests beside the package that owns the behavior:
 

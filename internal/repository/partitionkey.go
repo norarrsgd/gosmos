@@ -13,9 +13,10 @@ type keyField struct {
 	path  string
 }
 type entityMetadata struct {
-	fields   []keyField
-	override bool
-	name     string
+	fields         []keyField
+	componentCount int
+	override       bool
+	name           string
 }
 type metadataResult struct {
 	metadata entityMetadata
@@ -117,35 +118,67 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 		}
 		m.fields = append(m.fields, f)
 	}
+	m.componentCount = len(m.fields)
 	return m, nil
 }
+
+func (m entityMetadata) withPartitionKeyCount(count int) (entityMetadata, error) {
+	if count == 0 {
+		return m, nil
+	}
+	if !m.override {
+		return m, validation("WithPartitionKeyCount requires PartitionKeyer")
+	}
+	if m.componentCount > 0 && m.componentCount != count {
+		return m, validation("partition key count %d conflicts with %d tagged components", count, m.componentCount)
+	}
+	m.componentCount = count
+	return m, nil
+}
+
 func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) {
+	values, err := m.keyValues(value)
+	if err != nil {
+		return azcosmos.PartitionKey{}, err
+	}
+	return stringKey(values, m.componentCount)
+}
+
+func (m entityMetadata) keyValues(value reflect.Value) ([]string, error) {
 	if m.override {
 		p, ok := value.Interface().(PartitionKeyer)
 		if !ok && value.CanAddr() {
 			p, ok = value.Addr().Interface().(PartitionKeyer)
 		}
 		if !ok {
-			return azcosmos.PartitionKey{}, validation("PartitionKeyer unavailable")
+			return nil, validation("PartitionKeyer unavailable")
 		}
-		return stringKey(p.PartitionKeyValues(), len(m.fields))
+		return p.PartitionKeyValues(), nil
 	}
 	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
-	key := azcosmos.NewPartitionKey()
+	values := make([]string, 0, len(m.fields))
 	for _, field := range m.fields {
 		v := value.FieldByIndex(field.index)
 		if v.Kind() == reflect.Pointer {
 			if v.IsNil() {
-				return key, validation("partition key %s is null", field.path)
+				return nil, validation("partition key %s is null", field.path)
 			}
 			v = v.Elem()
 		}
-		key = key.AppendString(v.String())
+		values = append(values, v.String())
 	}
-	return key, nil
+	return values, nil
 }
+
+func (m entityMetadata) explicitKey(values []string) (azcosmos.PartitionKey, error) {
+	if m.componentCount == 0 {
+		return azcosmos.NewPartitionKey(), validation("explicit partition keys require partition key tags or WithPartitionKeyCount")
+	}
+	return stringKey(values, m.componentCount)
+}
+
 func stringKey(values []string, expected int) (azcosmos.PartitionKey, error) {
 	key := azcosmos.NewPartitionKey()
 	if len(values) < 1 || len(values) > 3 || (expected > 0 && len(values) != expected) {

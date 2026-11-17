@@ -56,6 +56,9 @@ func TestPartitionMetadata(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if m.componentCount != len(tc.paths) {
+					t.Fatalf("component count %d", m.componentCount)
+				}
 				for i, path := range tc.paths {
 					if m.fields[i].path != path {
 						t.Fatalf("path %s", m.fields[i].path)
@@ -74,6 +77,17 @@ type overrideEntity struct {
 }
 
 func (e *overrideEntity) PartitionKeyValues() []string { return []string{e.Key} }
+
+type hierarchicalOverrideEntity struct {
+	Base
+	Tenant string `json:"tenant" gosmos:"pk=1"`
+	Region string `json:"region" gosmos:"pk=2"`
+}
+
+func (e hierarchicalOverrideEntity) PartitionKeyValues() []string {
+	return []string{e.Tenant, e.Region}
+}
+
 func TestPartitionOverrideAndNull(t *testing.T) {
 	m, err := inspectEntity[overrideEntity]()
 	if err != nil {
@@ -82,6 +96,29 @@ func TestPartitionOverrideAndNull(t *testing.T) {
 	v := reflect.ValueOf(&overrideEntity{Key: "tenant"}).Elem()
 	if _, err = m.key(v); err != nil {
 		t.Fatal(err)
+	}
+	if _, err = m.explicitKey([]string{"tenant"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("unknown width: %v", err)
+	}
+	m, err = m.withPartitionKeyCount(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.explicitKey([]string{"tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	hierarchical, err := inspectEntity[hierarchicalOverrideEntity]()
+	if err != nil || hierarchical.componentCount != 2 {
+		t.Fatalf("hierarchical metadata: %+v %v", hierarchical, err)
+	}
+	if _, err = hierarchical.explicitKey([]string{"tenant"}); !errors.Is(err, ErrValidation) {
+		t.Fatalf("partial key: %v", err)
+	}
+	if _, err = hierarchical.explicitKey([]string{"tenant", "region"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = hierarchical.withPartitionKeyCount(3); !errors.Is(err, ErrValidation) {
+		t.Fatalf("conflicting count: %v", err)
 	}
 	sample := struct {
 		Base
@@ -119,7 +156,7 @@ func TestPartitionOverridePreservesTaggedWidth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.key(reflect.ValueOf(hierarchicalOverrideEntity{Tenant: "tenant", User: "user"})); err != nil {
+	if _, err := m.key(reflect.ValueOf(hierarchicalOverrideEntity{Tenant: "tenant", Region: "region"})); err != nil {
 		t.Fatalf("complete override rejected: %v", err)
 	}
 }
