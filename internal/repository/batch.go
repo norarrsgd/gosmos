@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,15 +14,23 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 )
 
-const batchMaxBytes = 2 * 1024 * 1024
+const (
+	batchMaxBytes     = 2 * 1024 * 1024
+	bulkMaxOperations = 10_000
+	bulkMaxBytes      = 64 * 1024 * 1024
+)
 
-// BatchItemResult preserves the original operation order, including unattempted items.
+// BatchItemResult preserves the original operation order and separates service outcomes from local decoding.
 type BatchItemResult[T Entity] struct {
 	Index  int
 	Item   T
 	Status int
 	ETag   string
-	Err    error
+	// Committed reports that the service confirmed both the transaction and this operation.
+	Committed bool
+	// DecodeError reports a local failure to decode a committed operation's returned resource body.
+	DecodeError error
+	Err         error
 }
 
 type BatchResult[T Entity] struct {
@@ -39,6 +48,7 @@ func (r BatchResult[T]) rejected(err error) (BatchResult[T], error) {
 type batchOperation[T Entity] struct {
 	kind, id string
 	key      azcosmos.PartitionKey
+	groupKey string
 	body     []byte
 	patch    azcosmos.PatchOperations
 	etag     *azcore.ETag
@@ -52,14 +62,17 @@ type batchContainer interface {
 }
 
 type batchBuilder[T Entity] struct {
-	galaxy     *Galaxy[T]
-	operations []batchOperation[T]
-	key        *azcosmos.PartitionKey
-	err        error
+	galaxy         *Galaxy[T]
+	operations     []batchOperation[T]
+	key            *azcosmos.PartitionKey
+	operationLimit int
+	byteLimit      int
+	estimatedBytes int
+	err            error
 }
 
 func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
-	if b.err != nil {
+	if !b.canPrepare() {
 		return
 	}
 	copy, v, err := entityCopy(item)
@@ -95,7 +108,12 @@ func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
 	if v.Type() == reflect.TypeFor[T]() {
 		copy = v.Interface().(T)
 	}
-	key, err := b.galaxy.metadata.key(v)
+	keyValues, err := b.galaxy.metadata.keyValues(v)
+	if err != nil {
+		b.err = err
+		return
+	}
+	key, err := stringKey(keyValues, b.galaxy.metadata.componentCount)
 	if err != nil {
 		b.err = err
 		return
@@ -105,11 +123,11 @@ func (b *batchBuilder[T]) model(kind string, item T, options []WriteOption) {
 		b.err = err
 		return
 	}
-	b.add(batchOperation[T]{kind: kind, id: id, key: key, body: body, item: copy}, options)
+	b.add(batchOperation[T]{kind: kind, id: id, key: key, groupKey: partitionIdentity(keyValues), body: body, item: copy}, options)
 }
 
 func (b *batchBuilder[T]) add(operation batchOperation[T], options []WriteOption) {
-	if b.err != nil {
+	if !b.canPrepare() {
 		return
 	}
 	if strings.TrimSpace(operation.id) == "" || strings.ContainsAny(operation.id, "\"\\/\t\r\n?#") {
@@ -160,11 +178,16 @@ func (b *batchBuilder[T]) add(operation batchOperation[T], options []WriteOption
 		b.err = validation("batch operation exceeds 2 MiB")
 		return
 	}
+	if b.byteLimit > 0 && 1+b.estimatedBytes+operation.size > b.byteLimit {
+		b.err = b.limitError()
+		return
+	}
+	b.estimatedBytes += operation.size
 	b.operations = append(b.operations, operation)
 }
 
 func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[T]), options []WriteOption) {
-	if b.err != nil {
+	if !b.canPrepare() {
 		return
 	}
 	var key azcosmos.PartitionKey
@@ -178,7 +201,7 @@ func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[
 			return
 		}
 	}
-	operation := batchOperation[T]{kind: kind, id: id, key: key}
+	operation := batchOperation[T]{kind: kind, id: id, key: key, groupKey: partitionIdentity(pk)}
 	if kind == "patch" {
 		if patch == nil {
 			b.err = validation("patch callback is required")
@@ -193,6 +216,30 @@ func (b *batchBuilder[T]) point(kind, id string, pk []string, patch func(*Patch[
 		}
 	}
 	b.add(operation, options)
+}
+
+func (b *batchBuilder[T]) canPrepare() bool {
+	if b.err != nil {
+		return false
+	}
+	if b.operationLimit > 0 && len(b.operations) >= b.operationLimit {
+		b.err = b.limitError()
+		return false
+	}
+	return true
+}
+
+func (b *batchBuilder[T]) limitError() error {
+	return validation("bulk batch exceeds %d operations or %d estimated bytes", b.operationLimit, b.byteLimit)
+}
+
+func partitionIdentity(values []string) string {
+	encoded := binary.AppendUvarint(nil, uint64(len(values)))
+	for _, value := range values {
+		encoded = binary.AppendUvarint(encoded, uint64(len(value)))
+		encoded = append(encoded, value...)
+	}
+	return string(encoded)
 }
 
 func (b *batchBuilder[T]) initial() (BatchResult[T], error) {
@@ -264,8 +311,16 @@ func (b *batchBuilder[T]) executeChunk(ctx context.Context, indexes []int, resul
 			item.Err = b.galaxy.failure("batch", &azcore.ResponseError{StatusCode: int(sdk.StatusCode)})
 		} else if !response.Success {
 			item.Err = b.galaxy.failure("batch", fmt.Errorf("transaction was rolled back"))
-		} else if len(sdk.ResourceBody) > 0 {
-			item.Err = json.Unmarshal(sdk.ResourceBody, &item.Item)
+		} else {
+			item.Committed = true
+			if len(sdk.ResourceBody) > 0 {
+				var decoded T
+				if err := json.Unmarshal(sdk.ResourceBody, &decoded); err != nil {
+					item.DecodeError = err
+				} else {
+					item.Item = decoded
+				}
+			}
 		}
 		if item.Err != nil {
 			all = append(all, item.Err)

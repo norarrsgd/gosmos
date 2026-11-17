@@ -3,15 +3,21 @@ package repository
 import (
 	"context"
 	"errors"
-	"reflect"
 	"sync"
 )
 
-// BulkBatch executes ordered transaction chunks per partition, at most four partitions at once.
+// BulkBatch accepts at most 10,000 operations or 64 MiB of estimated payload and executes
+// ordered transaction chunks per partition, at most four partitions at once.
 // Successfully committed chunks remain committed if another chunk fails.
 type BulkBatch[T Entity] struct{ builder batchBuilder[T] }
 
-func (g *Galaxy[T]) Bulk() *BulkBatch[T] { return &BulkBatch[T]{builder: batchBuilder[T]{galaxy: g}} }
+func (g *Galaxy[T]) Bulk() *BulkBatch[T] {
+	return &BulkBatch[T]{builder: batchBuilder[T]{
+		galaxy:         g,
+		operationLimit: bulkMaxOperations,
+		byteLimit:      bulkMaxBytes,
+	}}
+}
 
 func (b *BulkBatch[T]) Create(item T, o ...WriteOption) *BulkBatch[T] {
 	b.builder.model("create", item, o)
@@ -48,19 +54,19 @@ func (b *BulkBatch[T]) Execute(ctx context.Context) (BatchResult[T], error) {
 	if err != nil {
 		return result, err
 	}
-	var groups [][]int
+	groups := make([][]int, 0, len(b.builder.operations))
+	groupIndexes := make(map[string]int, len(b.builder.operations))
 	for i, operation := range b.builder.operations {
-		found := -1
-		for j, group := range groups {
-			if reflect.DeepEqual(operation.key, b.builder.operations[group[0]].key) {
-				found = j
-				break
-			}
+		if err := ctx.Err(); err != nil {
+			return result.rejected(err)
 		}
-		if found < 0 {
+		groupIndex, ok := groupIndexes[operation.groupKey]
+		if !ok {
+			groupIndex = len(groups)
+			groupIndexes[operation.groupKey] = groupIndex
 			groups = append(groups, []int{i})
 		} else {
-			groups[found] = append(groups[found], i)
+			groups[groupIndex] = append(groups[groupIndex], i)
 		}
 	}
 	var wg sync.WaitGroup
@@ -97,10 +103,31 @@ func (b *BulkBatch[T]) Execute(ctx context.Context) (BatchResult[T], error) {
 			}
 		})
 	}
-	for _, group := range groups {
-		jobs <- group
+	nextGroup := 0
+	var dispatchErr error
+dispatch:
+	for nextGroup < len(groups) {
+		if err := ctx.Err(); err != nil {
+			dispatchErr = err
+			break
+		}
+		select {
+		case jobs <- groups[nextGroup]:
+			nextGroup++
+		case <-ctx.Done():
+			dispatchErr = ctx.Err()
+			break dispatch
+		}
 	}
 	close(jobs)
 	wg.Wait()
+	if dispatchErr != nil {
+		for _, group := range groups[nextGroup:] {
+			for _, index := range group {
+				result.Items[index].Err = dispatchErr
+			}
+		}
+		failures = append(failures, dispatchErr)
+	}
 	return result, errors.Join(failures...)
 }

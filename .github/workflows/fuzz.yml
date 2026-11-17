@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [FuzzValidateIdentifier, FuzzNormalize, FuzzBuild]
+        target: [FuzzValidateIdentifier, FuzzNormalize, FuzzBuild, FuzzProjectionJSON]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
