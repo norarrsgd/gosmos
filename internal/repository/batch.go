@@ -15,13 +15,17 @@ import (
 
 const batchMaxBytes = 2 * 1024 * 1024
 
-// BatchItemResult preserves the original operation order, including unattempted items.
+// BatchItemResult preserves the original operation order and separates service outcomes from local decoding.
 type BatchItemResult[T Entity] struct {
 	Index  int
 	Item   T
 	Status int
 	ETag   string
-	Err    error
+	// Committed reports that the service confirmed both the transaction and this operation.
+	Committed bool
+	// DecodeError reports a local failure to decode a committed operation's returned resource body.
+	DecodeError error
+	Err         error
 }
 
 type BatchResult[T Entity] struct {
@@ -264,8 +268,16 @@ func (b *batchBuilder[T]) executeChunk(ctx context.Context, indexes []int, resul
 			item.Err = b.galaxy.failure("batch", &azcore.ResponseError{StatusCode: int(sdk.StatusCode)})
 		} else if !response.Success {
 			item.Err = b.galaxy.failure("batch", fmt.Errorf("transaction was rolled back"))
-		} else if len(sdk.ResourceBody) > 0 {
-			item.Err = json.Unmarshal(sdk.ResourceBody, &item.Item)
+		} else {
+			item.Committed = true
+			if len(sdk.ResourceBody) > 0 {
+				var decoded T
+				if err := json.Unmarshal(sdk.ResourceBody, &decoded); err != nil {
+					item.DecodeError = err
+				} else {
+					item.Item = decoded
+				}
+			}
 		}
 		if item.Err != nil {
 			all = append(all, item.Err)

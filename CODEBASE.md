@@ -138,6 +138,8 @@ Read consistency precedence is operation override -> repository default -> SDK/a
 
 `Bulk` groups by partition, chunks at the same operation/payload limits, and runs at most four partition pipelines concurrently. Chunks within a partition retain input order. A failed chunk stops later chunks in that partition; other partitions may continue. Earlier commits survive later errors or cancellation. Results preserve original order and identify unattempted operations; reconcile them before retrying. Transport errors can leave commit outcomes uncertain.
 
+Batch results keep service outcomes separate from local response decoding. `Committed` requires a successful transaction and a 2xx operation status. An incompatible returned resource body sets `DecodeError` without setting `Err` or the top-level execution error, so callers do not retry an already committed write; failed decoding also leaves any prepared entity intact instead of exposing a partially decoded value.
+
 `Patch` accepts one to ten operations and validates paths against entity structure. Dot notation and JSON Pointer notation use JSON field names; pointer escapes, array indices, and declared maps are supported. Paths cannot change `id` or root system properties beginning with `_`. Nil means JSON null, while `Remove` deletes a property. Patching does not invoke stamping hooks. Conditional filter predicates are not implemented.
 
 `IfMatch` supports optimistic concurrency; an empty ETag is invalid. Fluent batch and patch builders retain validation failures, so start a new builder after invalid input.
