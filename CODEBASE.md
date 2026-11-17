@@ -114,7 +114,7 @@ Create and modify prepare an addressable top-level copy. Read the returned entit
 
 Tagged partition keys use `gosmos:"pk=1"` through `pk=3`, with unique contiguous levels. Fields must be exported strings or string pointers and cannot be excluded from JSON. Null pointer values are invalid. JSON tags determine stored field names and provisioning paths; untagged anonymous value structs are traversed.
 
-`PartitionKeyer` overrides tagged extraction for writes. Explicit point/query keys contain one to three string components; tagged metadata also enforces the exact component count. Partial hierarchical keys are not supported.
+`PartitionKeyer` overrides tagged extraction for writes, while valid tags are retained as schema metadata and enforce the exact component count for both overridden writes and explicit keys. Partition-scoped queries require tags even for `PartitionKeyer` entities; an unknown width is rejected before the execution guard or SDK pager. Untagged overrides still support writes, explicit point operations, and eligible keyless queries. Partial hierarchical keys are not supported. Tags must describe the actual container partition-key schema; construction does not verify it against the service.
 
 `WithNamingPolicy` transforms source query path segments. It does not change entity JSON serialization or explicit projection output names. Keep query paths and stored JSON consistent. `SelectAs[R]` selects result-struct JSON field names; `ListAs[R]`, `GetAs[R]`, and `PagedAs[R]` only choose the decoding type and do not infer a projection. Use `Project` for nested output shapes and computed expressions.
 

@@ -231,7 +231,7 @@ Keys support one to three string components. Duplicate levels, gaps, non-string 
 ```go
 type Document struct {
     ID     string `json:"id"`
-    Tenant string `json:"tenant"`
+    Tenant string `json:"tenant" gosmos:"pk=1"`
 }
 
 func (d Document) GetID() string { return d.ID }
@@ -239,7 +239,7 @@ func (d *Document) SetID(id string) { d.ID = id }
 func (d Document) PartitionKeyValues() []string { return []string{d.Tenant} }
 ```
 
-`PartitionKeyer` takes precedence over tag extraction for document writes. Point reads still take explicit key components. `IDSetter` enables generated IDs; without it, create requires an existing ID. `Stamper` provides `StampCreate(time.Time)` and `StampModify(time.Time)` hooks. Custom partition-key extraction does not provide a container schema for auto-provisioning.
+`PartitionKeyer` takes precedence over tag extraction for document writes. If tags are present, they must be valid and their component count must match the returned key. Keep tags aligned with the actual container partition-key schema; Gosmos does not discover that schema from the service. Queries using `InPartition` require tags to establish the complete key width, including for `PartitionKeyer` entities, and reject missing or extra components with `ErrValidation` before making a request. Untagged overrides still support writes, explicit point operations, and eligible keyless queries. Point reads still take explicit key components. `IDSetter` enables generated IDs; without it, create requires an existing ID. `Stamper` provides `StampCreate(time.Time)` and `StampModify(time.Time)` hooks. Custom partition-key extraction alone does not provide a container schema for auto-provisioning; provisioning requires tags.
 
 ## Provision explicitly
 

@@ -104,13 +104,10 @@ func inspectType(t reflect.Type) (entityMetadata, error) {
 		}
 		return nil
 	}
-	if m.override {
-		return m, nil
-	}
 	if err := walk(base, nil, ""); err != nil {
 		return m, err
 	}
-	if len(numbered) == 0 {
+	if len(numbered) == 0 && !m.override {
 		return m, validation("entity requires partition key tags or PartitionKeyer")
 	}
 	for n := 1; n <= len(numbered); n++ {
@@ -131,7 +128,7 @@ func (m entityMetadata) key(value reflect.Value) (azcosmos.PartitionKey, error) 
 		if !ok {
 			return azcosmos.PartitionKey{}, validation("PartitionKeyer unavailable")
 		}
-		return stringKey(p.PartitionKeyValues(), 0)
+		return stringKey(p.PartitionKeyValues(), len(m.fields))
 	}
 	if value.Kind() == reflect.Pointer {
 		value = value.Elem()

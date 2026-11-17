@@ -95,3 +95,31 @@ func TestPartitionOverrideAndNull(t *testing.T) {
 		t.Fatalf("null key: %v", err)
 	}
 }
+
+type shortOverrideEntity struct {
+	Base
+	Tenant string `json:"tenant" gosmos:"pk=1"`
+	User   string `json:"user" gosmos:"pk=2"`
+}
+
+func (e shortOverrideEntity) PartitionKeyValues() []string { return []string{e.Tenant} }
+
+func TestPartitionOverridePreservesTaggedWidth(t *testing.T) {
+	m, err := inspectEntity[shortOverrideEntity]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.fields) != 2 || m.fields[0].path != "/tenant" || m.fields[1].path != "/user" {
+		t.Fatalf("lost tagged schema: %+v", m.fields)
+	}
+	if _, err := m.key(reflect.ValueOf(shortOverrideEntity{})); !errors.Is(err, ErrValidation) {
+		t.Fatalf("prefix override accepted: %v", err)
+	}
+	m, err = inspectEntity[hierarchicalOverrideEntity]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.key(reflect.ValueOf(hierarchicalOverrideEntity{Tenant: "tenant", User: "user"})); err != nil {
+		t.Fatalf("complete override rejected: %v", err)
+	}
+}
